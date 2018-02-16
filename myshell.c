@@ -42,7 +42,10 @@ int main( int argc, char *argv[] )  {
 		printf("your input: %s\n", buffer);
 		printf("HISTORY_INDEX %d\n", HISTORY_INDEX);
 		int ret = tokenize(buffer);
-		if (ret) continue; //bad input: don't write to history
+		if (ret) {
+			printf("$");
+			continue; //bad input: don't write to history
+		}
 		store_in_history(buffer);
 		printf("Now we are about to process line #%d\n", HISTORY_INDEX);
 		printf("$");
@@ -63,27 +66,27 @@ void remove_trailing_newline_char(char* input)
 void store_in_history(char* buffer) 
 {
 	char *bufferCopy= {strdup(buffer)};
-	printf("This cmd has length %lu\n", strlen(buffer));
-	printf("HISTORY_INDEX: %d\n", HISTORY_INDEX);
-	for (int i=0; i<MAX_HISTORY_CMDS; i++) {
-		printf("%d: %s\n", i, HISTORY_CMDS[i][0]);
-	}
+	// printf("This cmd has length %lu\n", strlen(buffer));
+	// printf("HISTORY_INDEX: %d\n", HISTORY_INDEX);
+	// for (int i=0; i<MAX_HISTORY_CMDS; i++) {
+	// 	printf("%d: %s\n", i, HISTORY_CMDS[i][0]);
+	// }
 	
 	HISTORY_CMDS[HISTORY_INDEX][0] = bufferCopy;
 	HISTORY_CMDS[HISTORY_INDEX][strlen(buffer)] = '\0';
 
-	printf("In row %d, value is: %s\n", HISTORY_INDEX, HISTORY_CMDS[HISTORY_INDEX][0]);
+	// printf("In row %d, value is: %s\n", HISTORY_INDEX, HISTORY_CMDS[HISTORY_INDEX][0]);
 
 	HISTORY_INDEX = (HISTORY_INDEX+1)%MAX_HISTORY_CMDS;
 
 	if (HISTORY_INDEX == HISTORY_START) {
 		HISTORY_START++;
 	}
-	printf ("HISTORY_START: %d, HISTORY_INDEX: %d\n", HISTORY_START, HISTORY_INDEX);
+	// printf ("HISTORY_START: %d, HISTORY_INDEX: %d\n", HISTORY_START, HISTORY_INDEX);
 
-	for (int i=0; i<MAX_HISTORY_CMDS; i++) {
-		printf("%d: %s\n", i, HISTORY_CMDS[i][0]);
-	}
+	// for (int i=0; i<MAX_HISTORY_CMDS; i++) {
+	// 	printf("%d: %s\n", i, HISTORY_CMDS[i][0]);
+	// }
 
 }
 
@@ -99,10 +102,13 @@ int tokenize(char *input) {
 		printf("is cd\n");
 		changeDirectory(input+3);
 	} else if (strcmp(input, "history") == 0) {
+		store_in_history(input);
 		showHistory();
+		return 1;
 	} else if (strcmp(input, "history -c") == 0) {
 		printf("clear history\n");
 		clearHistory();
+		return 1;
 	} else if (strncmp(input, "history ", 8) == 0) {
 		offset = (input+8);
 		printf("offset: '%s'\n", offset);
@@ -209,14 +215,10 @@ void createPipe(char* cmd1, char* cmd2)
 void showHistory()
 {
 	printf("In showHistory function\n");
-	if (HISTORY_START < HISTORY_INDEX) {
-		for (int i=HISTORY_START; i<HISTORY_INDEX-HISTORY_START; i++) {
-			printf("%d: %s\n", i-HISTORY_START, HISTORY_CMDS[i][0]);
-		}
-	} else {
-		for (int i=HISTORY_START; i<=MAX_HISTORY_CMDS+HISTORY_INDEX; i++) {
-			printf("%d: %s\n", i-HISTORY_START, HISTORY_CMDS[(i-1)%MAX_HISTORY_CMDS][0]);
-		}
+	for (int i=HISTORY_START; i<=HISTORY_START+MAX_HISTORY_CMDS; i++) {
+		if (HISTORY_CMDS[i][0] == NULL)
+			break;
+		printf("%d: %s\n", i-HISTORY_START, HISTORY_CMDS[i][0]);
 	}
 }
 
@@ -228,9 +230,6 @@ void clearHistory()
 	HISTORY_INDEX = 0;
 	for (int i=0; i<MAX_HISTORY_CMDS; i++) {
 		HISTORY_CMDS[i][0] = NULL;
-	}
-	for (int i=0; i<MAX_HISTORY_CMDS; i++) {
-		printf("%d: %s\n", i, HISTORY_CMDS[i][0]);
 	}
 }
 
