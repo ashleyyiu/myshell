@@ -139,16 +139,15 @@ int tokenize(char *input) {
 	else { // run built-in executables
 		// createPipeWrapper(input);
 		int argNum=0;
-		char* shellArgs[BUFF_SIZE];
+		char* shellArgs[256];
 		char command[256];
-		char *inputCopy= {strdup(input)};
+		char *inputCopy= {strdup(input)}; //strtok changes input, so copy
 
 		shellArgs[argNum] = strtok(inputCopy," "); //first arg
 		while(shellArgs[argNum] != NULL) //additional args
 		{
-			shellArgs[++argNum] = strtok(NULL," ");
+			shellArgs[++argNum] = strtok(NULL," "); //parse any more args
 		}
-		// shellArgs[argNum] = NULL;
 		printf("Num of args: %i\n", argNum);
 		printf("parsed arg:\n");
 		for (int index=0;index<argNum; index++)
