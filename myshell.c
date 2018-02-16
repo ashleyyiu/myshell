@@ -21,6 +21,7 @@ void clearHistory();
 void createPipeWrapper(char* input);
 void createPipe(char* cmd1, char* cmd2);
 void skipBlanks(char* inputStr);
+int runCommand(char*);
 
 const int PIPE_READ = 0;
 const int PIPE_WRITE = 1;
@@ -92,23 +93,29 @@ void store_in_history(char* buffer)
 int tokenize(char *input) {
 	regex_t regex;
 	char* offset;
+	char* semicolon = strchr(input, ';');
 	int offsetInt;
 	int rv;
 	int i = 0;
+	int retVal;
 
+	skipBlanks(input);
 	printf("Now tokenizing input: %s...\n", input);
 	if (strncmp(input, "cd ", 3) == 0) {
 		printf("is cd\n");
 		changeDirectory(input+3);
-	} else if (strcmp(input, "history") == 0) {
+	} 
+	else if (strcmp(input, "history") == 0) {
 		store_in_history(input);
 		showHistory();
 		return 1;
-	} else if (strcmp(input, "history -c") == 0) {
+	} 
+	else if (strcmp(input, "history -c") == 0) {
 		printf("clear history\n");
 		clearHistory();
 		return 1;
-	} else if (strncmp(input, "history ", 8) == 0) {
+	} 
+	else if (strncmp(input, "history ", 8) == 0) {
 		offset = (input+8);
 		printf("offset: '%s'\n", offset);
 		rv = regcomp(&regex, "[[:digit:]]{1,2}", REG_EXTENDED);
@@ -136,40 +143,48 @@ int tokenize(char *input) {
 		}
 	}
 	//not cd or history: run command
+	else if (semicolon != NULL) {
+		char* charIter = input;
+		while (semicolon != NULL) {
+			// printf("has semicolon\n");
+			char cur_command[256] = {0};
+			for (; charIter < semicolon; charIter++) {
+				// printf("letters before semicolon: %c\n", *charIter);
+				int cur_len = strlen(cur_command);
+				// printf("%i\n", cur_len);
+				cur_command[cur_len] = *charIter;
+				cur_command[cur_len+1] = '\0';
+			}
+			// printf("current command: %s\n", cur_command);
+
+			// run command
+			retVal = tokenize(cur_command);
+			if (retVal) return retVal; // if invalid, exit
+			semicolon = strchr(semicolon+1, ';'); // if valid, continue w/ next command
+			charIter++; //skip ; char
+		}
+		// printf("at end\n");
+		char* endOfInput = strchr(input, '\0');
+		char cur_command[256] = {0};
+		for (; charIter < endOfInput; charIter++) {
+			// printf("letters before end: %c\n", *charIter);
+			int cur_len = strlen(cur_command);
+			// printf("%i\n", cur_len);
+			cur_command[cur_len] = *charIter;
+			cur_command[cur_len+1] = '\0';
+		}
+		// printf("last command: %s\n", cur_command);
+		retVal = tokenize(cur_command);
+		return retVal;
+	}
+	//not cd or history: run command
 	else { // run built-in executables
-		createPipeWrapper(input);
-		// int argNum=0;
-		// char* shellArgs[256];
-		// char command[256];
-		// char *inputCopy= {strdup(input)}; //strtok changes input, so copy
-
-		// shellArgs[argNum] = strtok(inputCopy," "); //first arg
-		// while(shellArgs[argNum] != NULL) //additional args
-		// {
-		// 	shellArgs[++argNum] = strtok(NULL," "); //parse any more args
+		// if (semicolon != NULL) {
+			
 		// }
-		// printf("Num of args: %i\n", argNum);
-		// printf("parsed arg:\n");
-		// for (int index=0;index<argNum; index++)
-		// {
-		// 	printf("%s\n", shellArgs[index]);
-		// }
-
-		// strcpy(command, "/bin/");
-		// strcat(command, shellArgs[0]);
-		// int rc = fork();
-		// if (rc < 0) { // fork failed
-		// 	printf("Fork failed\n");
-		// 	return -1;
-		// }
-		// else if (rc == 0) { // child runs command
-		// 	printf("Fork success\n");
-
-		// 	execv(command, shellArgs);
-		// 	printf("After fork\n");
-		// }
-		// else { // parent: wait until child is done
-		// 	wait();
+		// else {
+			retVal = runCommand(input);
+			return retVal;
 		// }
 	}
 	return 0; //success
@@ -297,6 +312,44 @@ void changeDirectory(char *newDirectory)
 		perror("Failed to change directory");
 	}
 
+}
+
+int runCommand(char* input) {
+	// createPipeWrapper(input);
+	int argNum=0;
+	char* shellArgs[BUFF_SIZE];
+	char command[BUFF_SIZE];
+	char *inputCopy= {strdup(input)}; //strtok changes input, so copy
+
+	shellArgs[argNum] = strtok(inputCopy," "); //first arg
+	while(shellArgs[argNum] != NULL) //additional args
+	{
+		shellArgs[++argNum] = strtok(NULL," "); //parse any more args
+	}
+	printf("Num of args: %i\n", argNum);
+	printf("parsed arg:\n");
+	for (int index=0;index<argNum; index++)
+	{
+		printf("%s\n", shellArgs[index]);
+	}
+
+	strcpy(command, "/bin/");
+	strcat(command, shellArgs[0]);
+	int rc = fork();
+	if (rc < 0) { // fork failed
+		printf("Fork failed\n");
+		return -1;
+	}
+	else if (rc == 0) { // child runs command
+		printf("Fork success\n");
+
+		execv(command, shellArgs);
+		printf("After fork\n");
+	}
+	else { // parent: wait until child is done
+		wait();
+	}
+	return 0;
 }
 
 void skipBlanks(char* inputStr) {
