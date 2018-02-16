@@ -20,7 +20,7 @@ void showHistory();
 void clearHistory();
 void createPipeWrapper(char* input);
 void createPipe(char* cmd1, char* cmd2);
-char skipBlanks(char* inputStr);
+char* skipBlanks(char* inputStr);
 
 const int PIPE_READ = 0;
 const int PIPE_WRITE = 1;
