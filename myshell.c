@@ -115,7 +115,8 @@ int tokenize(char *input) {
 		rv = regcomp(&regex, "[[:digit:]]{1,2}", REG_EXTENDED);
 		if (rv != 0) {
 			printf("regcomp failed with %d\n", rv);
-		} else {
+		} 
+		else {
 			rv = regexec(&regex, offset, 0, NULL, 0);
 			printf("rv: %d\n", rv);
 			if (!rv) {
@@ -124,24 +125,28 @@ int tokenize(char *input) {
 				if (HISTORY_START == HISTORY_INDEX+1) {// just reached max capacity, had to bump start over to make room
 					printf("about to run the cmd at index %d\n", (offsetInt+HISTORY_START-1)%MAX_HISTORY_CMDS);
 					tokenize(HISTORY_CMDS[((offsetInt+HISTORY_START-1)%MAX_HISTORY_CMDS)][0]);
-				} else {
+				} 
+				else {
 					printf("about to run the cmd at index %d\n", (offsetInt+HISTORY_START)%MAX_HISTORY_CMDS);
 					tokenize(HISTORY_CMDS[( offsetInt+HISTORY_START)%MAX_HISTORY_CMDS][0]);
 				}
-			} else {
+			} 
+			else {
 				printf("no offset match\n");
 			}
 		}
-	} else { // run built-in executables
+	}
+	//not cd or history: run command
+	else { // run built-in executables
 		// createPipeWrapper(input);
 		int argNum=0;
 		char* shellArgs[BUFF_SIZE];
 		char command[256];
 
 		shellArgs[argNum] = strtok(input," "); //first arg
-		while(shellArgs[argNum] != NULL)
+		while(shellArgs[argNum] != NULL) //additional args
 		{
-		   shellArgs[++argNum] = strtok(NULL," ");
+			shellArgs[++argNum] = strtok(NULL," ");
 		}
 		shellArgs[argNum] = NULL;
 		printf("Num of args: %i\n", argNum);
@@ -154,13 +159,18 @@ int tokenize(char *input) {
 		strcpy(command, "/bin/");
 		strcat(command, shellArgs[0]);
 		int rc = fork();
-		if (rc < 0) {
+		if (rc < 0) { // fork failed
 			printf("Fork failed\n");
-		} else {
-			printf("Fork succes\n");
+			return -1;
+		}
+		else if (rc == 0) { // child runs command
+			printf("Fork success\n");
 
 			execv(command, shellArgs);
 			printf("After fork\n");
+		}
+		else { // parent: wait until child is done
+			wait();
 		}
 	}
 	return 0; //success
