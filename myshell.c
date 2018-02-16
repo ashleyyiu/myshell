@@ -20,7 +20,7 @@ void showHistory();
 void clearHistory();
 void createPipeWrapper(char* input);
 void createPipe(char* cmd1, char* cmd2);
-char* skipBlanks(char* inputStr);
+void skipBlanks(char* inputStr);
 
 const int PIPE_READ = 0;
 const int PIPE_WRITE = 1;
@@ -38,7 +38,7 @@ int main( int argc, char *argv[] )  {
     		exit(0);
     	}
 		remove_trailing_newline_char(buffer);
-		buffer = skipBlanks(buffer);
+		skipBlanks(buffer);
 		printf("your input: %s\n", buffer);
 		printf("HISTORY_INDEX %d\n", HISTORY_INDEX);
 		int ret = tokenize(buffer);
@@ -87,7 +87,7 @@ void store_in_history(char* buffer)
 
 }
 
-void tokenize(char *input) {
+int tokenize(char *input) {
 	regex_t regex;
 	char* offset;
 	int offsetInt;
@@ -253,7 +253,7 @@ void changeDirectory(char *newDirectory)
 
 }
 
-char* skipBlanks(char* inputStr) {
+void skipBlanks(char* inputStr) {
 	while (inputStr[0] == ' ') {
 		memmove(inputStr, inputStr+1, strlen(inputStr));
 	}
