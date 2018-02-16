@@ -133,20 +133,21 @@ int tokenize(char *input) {
 			}
 		}
 	} else { // run built-in executables
-		createPipeWrapper(input);
-		// i=0;
-		// char* shellArgs[BUFF_SIZE];
-		// shellArgs[i] = strtok(input," ");
-		// while(shellArgs[i]!=NULL)
-		// {
-		//    shellArgs[++i] = strtok(NULL," ");
-		// }
-		// shellArgs[i]=NULL;
-		// printf("parsed arg:\n");
-		// for (int index=0;index<10; index++)
-		// {
-		// 	printf("%s\n", shellArgs[index]);
-		// }
+		// createPipeWrapper(input);
+		int argNum=0;
+		char* shellArgs[BUFF_SIZE];
+
+		shellArgs[argNum] = strtok(input," "); //first arg
+		while(shellArgs[argNum] != NULL)
+		{
+		   shellArgs[++argNum] = strtok(NULL," ");
+		}
+		printf("Num of args: %i\n", argNum);
+		printf("parsed arg:\n");
+		for (int index=0;index<argNum; index++)
+		{
+			printf("%s\n", shellArgs[index]);
+		}
 		// int rc = fork();
 		// if (rc < 0) {
 		// 	printf("Fork failed\n");
