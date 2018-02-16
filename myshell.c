@@ -137,40 +137,40 @@ int tokenize(char *input) {
 	}
 	//not cd or history: run command
 	else { // run built-in executables
-		// createPipeWrapper(input);
-		int argNum=0;
-		char* shellArgs[256];
-		char command[256];
-		char *inputCopy= {strdup(input)}; //strtok changes input, so copy
+		createPipeWrapper(input);
+		// int argNum=0;
+		// char* shellArgs[256];
+		// char command[256];
+		// char *inputCopy= {strdup(input)}; //strtok changes input, so copy
 
-		shellArgs[argNum] = strtok(inputCopy," "); //first arg
-		while(shellArgs[argNum] != NULL) //additional args
-		{
-			shellArgs[++argNum] = strtok(NULL," "); //parse any more args
-		}
-		printf("Num of args: %i\n", argNum);
-		printf("parsed arg:\n");
-		for (int index=0;index<argNum; index++)
-		{
-			printf("%s\n", shellArgs[index]);
-		}
+		// shellArgs[argNum] = strtok(inputCopy," "); //first arg
+		// while(shellArgs[argNum] != NULL) //additional args
+		// {
+		// 	shellArgs[++argNum] = strtok(NULL," "); //parse any more args
+		// }
+		// printf("Num of args: %i\n", argNum);
+		// printf("parsed arg:\n");
+		// for (int index=0;index<argNum; index++)
+		// {
+		// 	printf("%s\n", shellArgs[index]);
+		// }
 
-		strcpy(command, "/bin/");
-		strcat(command, shellArgs[0]);
-		int rc = fork();
-		if (rc < 0) { // fork failed
-			printf("Fork failed\n");
-			return -1;
-		}
-		else if (rc == 0) { // child runs command
-			printf("Fork success\n");
+		// strcpy(command, "/bin/");
+		// strcat(command, shellArgs[0]);
+		// int rc = fork();
+		// if (rc < 0) { // fork failed
+		// 	printf("Fork failed\n");
+		// 	return -1;
+		// }
+		// else if (rc == 0) { // child runs command
+		// 	printf("Fork success\n");
 
-			execv(command, shellArgs);
-			printf("After fork\n");
-		}
-		else { // parent: wait until child is done
-			wait();
-		}
+		// 	execv(command, shellArgs);
+		// 	printf("After fork\n");
+		// }
+		// else { // parent: wait until child is done
+		// 	wait();
+		// }
 	}
 	return 0; //success
 }
@@ -180,25 +180,38 @@ int tokenize(char *input) {
 void createPipeWrapper(char* input)
 {	printf("Creating createPipeWrapper\n");
 	int pipes = 0;
-    char *tmp = input;
-	char* cmd1;
-	char* cmd2;
+    char* tmpInput = input;
+    char* tmp;
+    char* inputCopy = {strdup(input)};
+    int i = 0;
     int positions[strlen(input)];
     const char *needle = "|";
-	while (tmp = strstr(tmp, needle))
+	while (tmpInput = strstr(tmpInput, needle))
 	{
-		printf("Found | at position %d\n", (int) (tmp-input));
-		positions[pipes] = (int) (tmp-input);
-		++tmp;
+		printf("Found | at position %d\n", (int) (tmpInput-input));
+		positions[pipes] = (int) (tmpInput-input);
+		++tmpInput;
 		++pipes;
 	}
 	printf("We need %d pipes\n", pipes);
-	for (int i=0; i<pipes; i++)
-	{
-		printf("%d \n", positions[i]);
-		//send to createpipe
+    
+    char* allCommands[pipes][256];
 
+    //split up the commands
+	tmp = strtok (inputCopy, "|");
+
+	while (tmp != NULL)
+    {
+        allCommands[i++][0] = tmp;
+        tmp = strtok (NULL, "|");
+    }
+
+	//assuming we have 2 only
+	for (int i=0; i<pipes+1; i++)
+	{
+		printf("allCommands at %d: %s\n", i, allCommands[i][0]);
 	}
+	createPipe(allCommands[0][0], allCommands[1][0]);
 
 }
 
@@ -206,22 +219,40 @@ void createPipe(char* cmd1, char* cmd2)
 {
 	printf("in createPipe where cmd1 is %s and cmd2 is %s\n", cmd1, cmd2);
 
-	pipe(fd);
-	pid_t pid = fork();
+	char cmdPath1[256];
+	char cmdPath2[256];
+	strcpy(cmdPath1, "/bin/");
+	strcpy(cmdPath2, "/bin/");
+
+	char* tmpCmd1 = {strdup(cmd1)};
+	char* tmpCmd2 = {strdup(cmd2)};
+	char* tmpCmd;
 	
-	if (fork() == 0) {
+	tmpCmd = strtok(tmpCmd1, " ");
+	printf("tmpCmd1: %s\n", tmpCmd);
+	strcat(cmdPath1, tmpCmd);
+
+	tmpCmd = strtok(tmpCmd2, " ");
+	printf("tmpCmd2: %s\n", tmpCmd);
+	strcat(cmdPath2, tmpCmd);
+
+	pipe(fd);
+
+	int rc = fork();
+	if (rc < 0){
+		printf("Fork failed\n");
+	} else if (rc == 0) {
 		printf("Child proc 1\n");
 	    dup2(fd[0], STDIN_FILENO); // fd[0] for reading
-	    close(fd[1]);
-    	close(fd[0]);
 		if (fork() == 0) {
-			dup2(fd[1], STDOUT_FILENO);
-			close(fd[1]);
-    		close(fd[0]);
-        	execvp(cmd1[0], cmd1);
+			printf("Child proc 2\n");
+			dup2(fd[1], STDOUT_FILENO); // fd[1] for writing
+		    printf("executing cmd1\n");
+        	execv(cmdPath1, cmd1); // cmd1 writes
 		}
 	    wait(NULL);
-	    execvp(cmd2[0], cmd2);
+	    printf("executing cmd2\n");
+	    execv(cmdPath2, cmd2); // cmd2 reads
 	}
 	close(fd[1]);
     close(fd[0]);
