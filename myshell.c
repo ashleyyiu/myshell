@@ -71,7 +71,6 @@ void store_in_history(char* buffer)
 	// for (int i=0; i<MAX_HISTORY_CMDS; i++) {
 	// 	printf("%d: %s\n", i, HISTORY_CMDS[i][0]);
 	// }
-	
 	HISTORY_CMDS[HISTORY_INDEX][0] = bufferCopy;
 	HISTORY_CMDS[HISTORY_INDEX][strlen(buffer)] = '\0';
 
@@ -142,13 +141,14 @@ int tokenize(char *input) {
 		int argNum=0;
 		char* shellArgs[BUFF_SIZE];
 		char command[256];
+		char *inputCopy= {strdup(input)};
 
-		shellArgs[argNum] = strtok(input," "); //first arg
+		shellArgs[argNum] = strtok(inputCopy," "); //first arg
 		while(shellArgs[argNum] != NULL) //additional args
 		{
 			shellArgs[++argNum] = strtok(NULL," ");
 		}
-		shellArgs[argNum] = NULL;
+		// shellArgs[argNum] = NULL;
 		printf("Num of args: %i\n", argNum);
 		printf("parsed arg:\n");
 		for (int index=0;index<argNum; index++)
