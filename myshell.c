@@ -136,26 +136,32 @@ int tokenize(char *input) {
 		// createPipeWrapper(input);
 		int argNum=0;
 		char* shellArgs[BUFF_SIZE];
+		char command[256];
 
 		shellArgs[argNum] = strtok(input," "); //first arg
 		while(shellArgs[argNum] != NULL)
 		{
 		   shellArgs[++argNum] = strtok(NULL," ");
 		}
+		shellArgs[argNum] = NULL;
 		printf("Num of args: %i\n", argNum);
 		printf("parsed arg:\n");
 		for (int index=0;index<argNum; index++)
 		{
 			printf("%s\n", shellArgs[index]);
 		}
-		// int rc = fork();
-		// if (rc < 0) {
-		// 	printf("Fork failed\n");
-		// } else {
-		// 	printf("Fork succes\n");
-		// 	execv("/bin/",shellArgs);
-		// 	printf("After fork\n");
-		// }
+
+		strcpy(command, "/bin/");
+		strcat(command, shellArgs[0]);
+		int rc = fork();
+		if (rc < 0) {
+			printf("Fork failed\n");
+		} else {
+			printf("Fork succes\n");
+
+			execv(command, shellArgs);
+			printf("After fork\n");
+		}
 	}
 	return 0; //success
 }
