@@ -12,7 +12,7 @@
 #define STDIN_FILENO 0
 #define STDOUT_FILENO 1
 
-void tokenize(char *input);
+int tokenize(char *input);
 void changeDirectory(char *newDirectory);
 void remove_trailing_newline_char(char *input);
 void store_in_history(char* buffer);
@@ -20,6 +20,7 @@ void showHistory();
 void clearHistory();
 void createPipeWrapper(char* input);
 void createPipe(char* cmd1, char* cmd2);
+char skipBlanks(char* inputStr);
 
 const int PIPE_READ = 0;
 const int PIPE_WRITE = 1;
@@ -37,10 +38,12 @@ int main( int argc, char *argv[] )  {
     		exit(0);
     	}
 		remove_trailing_newline_char(buffer);
+		buffer = skipBlanks(buffer);
 		printf("your input: %s\n", buffer);
 		printf("HISTORY_INDEX %d\n", HISTORY_INDEX);
+		int ret = tokenize(buffer);
+		if (ret) continue; //bad input: don't write to history
 		store_in_history(buffer);
-		tokenize(buffer);
 		printf("Now we are about to process line #%d\n", HISTORY_INDEX);
 		printf("$");
     }
@@ -147,6 +150,7 @@ void tokenize(char *input) {
 		// 	printf("After fork\n");
 		// }
 	}
+	return 0; //success
 }
 	//you will have to handle (; & < >) characters.
 
@@ -247,4 +251,10 @@ void changeDirectory(char *newDirectory)
 		perror("Failed to change directory");
 	}
 
+}
+
+char* skipBlanks(char* inputStr) {
+	while (inputStr[0] == ' ') {
+		memmove(inputStr, inputStr+1, strlen(inputStr));
+	}
 }
