@@ -1,5 +1,5 @@
 // Matthew Chiang and Ashley Yiu
-// OS Assignment 1
+// OS Assignment 1: myshell
 // 2/28/2018
 
 #include <stdio.h>
@@ -9,13 +9,13 @@
 #include <regex.h>
 #include <sys/wait.h>
 
-#define BUFF_SIZE 2048
+#define MAX_INPUT_SIZE 2048
 #define MAX_HISTORY_CMDS 5
 #define STDIN_FILENO 0
 #define STDOUT_FILENO 1
 
 int tokenize(char *input);
-void changeDirectory(char *newDirectory);
+int changeDirectory(char *newDirectory);
 void remove_trailing_newline_char(char *input);
 void store_in_history(char* buffer);
 void showHistory();
@@ -29,39 +29,36 @@ const int PIPE_READ = 0;
 const int PIPE_WRITE = 1;
 const char* PATHS[3] = {"/bin/","/usr/bin/","./"};
 const int NUM_PATHS = 3;
-char* HOME_DIREC;
+char* HOME_DIREC = NULL;
 int fd[2];
 int HISTORY_START = 0;
 int HISTORY_INDEX = 0; // points to next avail space
 char* HISTORY_CMDS[MAX_HISTORY_CMDS][MAX_HISTORY_CMDS];
 
 int main( int argc, char *argv[] )  {
-	char buffer[BUFF_SIZE];
-	// const char homeDirec[BUFF_SIZE];
-	// getcwd(homeDirec, BUFF_SIZE);
+	char input_buffer[MAX_INPUT_SIZE];
+	// const char homeDirec[MAX_INPUT_SIZE];
+	// getcwd(homeDirec, MAX_INPUT_SIZE);
 	// HOME_DIREC = &homeDirec;
-	getcwd(HOME_DIREC, BUFF_SIZE);
+	getcwd(HOME_DIREC, MAX_INPUT_SIZE);
 
 	printf("$");
-	while (fgets (buffer, BUFF_SIZE, stdin))
+	while (fgets (input_buffer, MAX_INPUT_SIZE, stdin))
 	{
-		if (strcmp(buffer, "exit\n")==0) {
-			exit(0);
-		}
-		if (!strcmp(buffer, "\n") || !strcmp(buffer, "\r\n")) { //empty line
+		//check + ignore empty lines
+		if (!strcmp(input_buffer, "\n") || !strcmp(input_buffer, "\r\n")) {
 			printf("$");
 			continue;
 		}
-		remove_trailing_newline_char(buffer);
-		skipBlanks(buffer);
-		printf("your input: %s\n", buffer);
+		remove_trailing_newline_char(input_buffer);
+		printf("your input: %s\n", input_buffer);
 		printf("HISTORY_INDEX %d\n", HISTORY_INDEX);
-		int ret = tokenize(buffer);
-		if (ret) {
+		int ret = tokenize(input_buffer);
+		if (ret) { //if ret val not 0, don't write in history
 			printf("$");
 			continue; //bad input: don't write to history
 		}
-		store_in_history(buffer);
+		store_in_history(input_buffer);
 		printf("Now we are about to process line #%d\n", HISTORY_INDEX);
 		printf("$");
 	}
@@ -113,8 +110,8 @@ int tokenize(char *input) {
 	int rv;
 	int i = 0;
 	int retVal;
-	char inputCopy[BUFF_SIZE];
-	char input_to_tokens[BUFF_SIZE];
+	char inputCopy[MAX_INPUT_SIZE];
+	char input_to_tokens[MAX_INPUT_SIZE];
 
 	strcpy(inputCopy, input); // dest, source
 	strcpy(input_to_tokens, input); // dest, source
@@ -165,24 +162,29 @@ int tokenize(char *input) {
 	// DEBUG: Print the actual command to run
 	printf("Now tokenizing input: \"%s\"\n", inputCopy);
 
+	// exit
+	if (!strcmp(command, "exit")) {
+		exit(0);
+	}
+
 	// cd
-	if (!strcmp(command, "cd")) {
+	else if (!strcmp(command, "cd")) {
 		printf("is cd\n");
-		char* destination = strtok(NULL, " ");
+		char* destination = strtok(NULL, " "); //parse destination
 
 		//no destination: go home
 		if (destination == NULL) {
 			if (HOME_DIREC == NULL) {
 				printf("no dest or home direc\n");
 			}
-			changeDirectory(HOME_DIREC);
+			return changeDirectory(HOME_DIREC);
 		}
 		// destination exists
-		else { 
-			changeDirectory(destination);
+		else {
+			return changeDirectory(destination);
 		}
-		return 1; //write in history
 	} //end cd
+
 	// history
 	else if (strcmp(inputCopy, "history") == 0) {
 		store_in_history(inputCopy);
@@ -224,8 +226,7 @@ int tokenize(char *input) {
 
 	//not cd or history: run command
 	else {
-		retVal = runCommand(inputCopy, (ampersandLoc == NULL) ? 0 : 1);
-		return retVal;
+		return runCommand(inputCopy, (ampersandLoc == NULL) ? 0 : 1);
 	}
 
 	return -1;
@@ -336,7 +337,7 @@ void clearHistory()
 	}
 }
 
-void changeDirectory(char *newDirectory)
+int changeDirectory(char *newDirectory)
 {
 	printf("Changing Directory to: '%s'\n", newDirectory);
 	char cwd[1024];
@@ -346,21 +347,25 @@ void changeDirectory(char *newDirectory)
 	if (!chdir(newDirectory)) {
 		if (getcwd(cwd, sizeof(cwd))) {
 			printf("New Directory is now: %s\n", cwd);
-		} else {
-			perror("getcwd() error");
 		}
-	} else {
+		else {
+			perror("getcwd() error");
+			return -1;
+		}
+	} 
+	else {
 		perror("Failed to change directory");
+		return -1;
 	}
-
+	return 0;
 }
 
 int runCommand(char* input, int hasAmpersand) {
 	// createPipeWrapper(input);
 	int argNum = 0;
 	int found = 0;
-	char* shellArgs[BUFF_SIZE];
-	char command[BUFF_SIZE];
+	char* shellArgs[MAX_INPUT_SIZE];
+	char command[MAX_INPUT_SIZE];
 	char *inputCopy= {strdup(input)}; //strtok changes input, so copy
 
 	shellArgs[argNum] = strtok(inputCopy," "); //first arg
@@ -390,8 +395,6 @@ int runCommand(char* input, int hasAmpersand) {
 		}
 		return -1;
 	}
-	// strcpy(command, "/bin/");
-	// strcat(command, shellArgs[0]);
 	int pid = fork();
 	if (pid < 0) { // fork failed
 		printf("Fork failed\n");
