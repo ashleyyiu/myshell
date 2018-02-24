@@ -27,8 +27,8 @@ int runCommand(char*, int);
 
 const int PIPE_READ = 0;
 const int PIPE_WRITE = 1;
-const char* ENV[3] = {"/bin/","/usr/bin/","./"};
-const int vals_in_env = 3;
+const char* PATHS[3] = {"/bin/","/usr/bin/","./"};
+const int NUM_PATHS = 3;
 char* HOME_DIREC;
 int fd[2];
 int HISTORY_START = 0;
@@ -368,14 +368,14 @@ int runCommand(char* input, int hasAmpersand) {
 	{
 		shellArgs[++argNum] = strtok(NULL," "); //parse any more args
 	}
-	printf("Num of args: %i\n", argNum);
-	printf("Listing all arguments:\n");
-	for (int index=0;index<argNum; index++)
-	{
-		printf("[%i] %s\n", index, shellArgs[index]);
-	}
-	for (int cur_env = 0; cur_env < vals_in_env; cur_env++) {
-		strcpy(command, ENV[cur_env]);
+	// printf("Num of args: %i\n", argNum);
+	// printf("Listing all arguments:\n");
+	// for (int index=0;index<argNum; index++)
+	// {
+	// 	printf("[%i] %s\n", index, shellArgs[index]);
+	// }
+	for (int cur_path = 0; cur_path < NUM_PATHS; cur_path++) {
+		strcpy(command, PATHS[cur_path]);
 		strcat(command, shellArgs[0]);
 		if (!access(command, X_OK)) {
 			found = 1;
@@ -383,7 +383,11 @@ int runCommand(char* input, int hasAmpersand) {
 		}
 	}
 	if (found == 0) {
-		printf("Error: command not found\n");
+		printf("Error: entered command not found\n");
+		printf("Accepted paths are:\n");
+		for (int cur_path = 0; cur_path < NUM_PATHS; cur_path++) {
+			printf("\t%s\n", PATHS[cur_path]);
+		}
 		return -1;
 	}
 	// strcpy(command, "/bin/");
