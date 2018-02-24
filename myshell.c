@@ -4,6 +4,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <string.h>
 #include <regex.h>
 #include <sys/wait.h>
@@ -26,6 +27,8 @@ int runCommand(char*, int);
 
 const int PIPE_READ = 0;
 const int PIPE_WRITE = 1;
+const char* ENV[3] = {"/bin/","/usr/bin/","./"};
+const int vals_in_env = 3;
 char* HOME_DIREC;
 int fd[2];
 int HISTORY_START = 0;
@@ -353,10 +356,9 @@ void changeDirectory(char *newDirectory)
 }
 
 int runCommand(char* input, int hasAmpersand) {
-	printf("Here is input: %s\n", input);
-	printf("Here is hasAmpersand: %i\n", hasAmpersand);
 	// createPipeWrapper(input);
-	int argNum=0;
+	int argNum = 0;
+	int found = 0;
 	char* shellArgs[BUFF_SIZE];
 	char command[BUFF_SIZE];
 	char *inputCopy= {strdup(input)}; //strtok changes input, so copy
@@ -372,30 +374,33 @@ int runCommand(char* input, int hasAmpersand) {
 	{
 		printf("[%i] %s\n", index, shellArgs[index]);
 	}
-
-	strcpy(command, "/bin/");
-	strcat(command, shellArgs[0]);
+	for (int cur_env = 0; cur_env < vals_in_env; cur_env++) {
+		strcpy(command, ENV[cur_env]);
+		strcat(command, shellArgs[0]);
+		if (!access(command, X_OK)) {
+			found = 1;
+			break;
+		}
+	}
+	if (found == 0) {
+		printf("Error: command not found\n");
+		return -1;
+	}
+	// strcpy(command, "/bin/");
+	// strcat(command, shellArgs[0]);
 	int pid = fork();
 	if (pid < 0) { // fork failed
 		printf("Fork failed\n");
 		return -1;
 	}
 	else if (pid == 0) { // child runs command
-		printf("Fork success\n");
-
+		// printf("Fork success\n");
 		execv(command, shellArgs);
 		printf("Exec failed\n");
 	}
 	else { // parent: wait until child is done (unless &)
-		if (!hasAmpersand) {
+		if (!hasAmpersand)
 			waitpid(pid, NULL, 0);
-			printf("after wait\n");
-		}
-		else {
-			return 0;
-			printf("has amp\n");
-		}
-
 	}
 	return 0;
 }
