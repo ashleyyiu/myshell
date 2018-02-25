@@ -1,5 +1,5 @@
 // Matthew Chiang and Ashley Yiu
-// OS Assignment 1: myshell
+// OS Assignment 1
 // 2/28/2018
 
 #include <stdio.h>
@@ -80,27 +80,14 @@ void remove_trailing_newline_char(char* input)
 void store_in_history(char* buffer) 
 {
 	char *bufferCopy= {strdup(buffer)};
-	// printf("This cmd has length %lu\n", strlen(buffer));
-	// printf("HISTORY_INDEX: %d\n", HISTORY_INDEX);
-	// for (int i=0; i<MAX_HISTORY_CMDS; i++) {
-	// 	printf("%d: %s\n", i, HISTORY_CMDS[i][0]);
-	// }
 	HISTORY_CMDS[HISTORY_INDEX][0] = bufferCopy;
 	HISTORY_CMDS[HISTORY_INDEX][strlen(buffer)] = '\0';
-
-	// printf("In row %d, value is: %s\n", HISTORY_INDEX, HISTORY_CMDS[HISTORY_INDEX][0]);
 
 	HISTORY_INDEX = (HISTORY_INDEX+1)%MAX_HISTORY_CMDS;
 
 	if (HISTORY_INDEX == HISTORY_START) {
 		HISTORY_START++;
 	}
-	// printf ("HISTORY_START: %d, HISTORY_INDEX: %d\n", HISTORY_START, HISTORY_INDEX);
-
-	// for (int i=0; i<MAX_HISTORY_CMDS; i++) {
-	// 	printf("%d: %s\n", i, HISTORY_CMDS[i][0]);
-	// }
-
 }
 
 int tokenize(char *input) {
@@ -365,27 +352,49 @@ void createPipe(char* cmd1, char* cmd2)
 		printf("[%i] %s\n", index, execCmd2[index]);
 	}
 
+	int PIPE_READ;
+	int PIPE_WRITE;
+
+	int fd[2];
 	pipe(fd);
 
-	int rc = fork();
+	pid_t rc = fork();
+	pid_t rc2 = 0;
+	int status1;
+	int status2;
+
+  	PIPE_WRITE = fd[1];
+  	PIPE_READ = fd[0];
+
 	if (rc < 0){
 		printf("Fork failed\n");
-	} else if (rc == 0) {
-		printf("Child proc 1\n");
-	    dup2(fd[0], STDIN_FILENO); // fd[0] for reading
-		if (fork() == 0) {
-			printf("Child proc 2\n");
-			dup2(fd[1], STDOUT_FILENO); // fd[1] for writing
-		    // printf("executing cmd1\n");
-        	execv(cmdPath1, execCmd1); // cmd1 writes
+
+	} else if (rc == 0) { // 1st child process will write to pipe
+		printf("Child proc, PID:=%d\n", getpid());
+		dup2(PIPE_WRITE, STDOUT_FILENO); // replace stdout with pipe input
+		close(PIPE_READ);
+		execv(cmdPath1, execCmd1);
+		perror("exec");
+	} else { // parent process will read from pipe
+		wait(NULL);
+		printf("Parent proc, PID:=%d\n", getpid());
+
+		// 2nd child process will read from pipe
+		rc2 = fork();
+		if (rc2 < 0) {
+			printf("Fork failed\n");
+		} else if (rc2 == 0) {
+			printf("Parent's second child proc, PID:=%d\n", getpid());
+			dup2(PIPE_READ, STDIN_FILENO); // replace stdin with pipe output
+			close(PIPE_WRITE);
+			execv(cmdPath2, execCmd2);
+			perror("exec");
 		}
-	    wait(NULL);
-	    printf("executing cmd2\n");
-	    execv(cmdPath2, execCmd2); // cmd2 reads
+		close(PIPE_READ);
+		close(PIPE_WRITE);
+		waitpid(rc, status1, 0);
+		waitpid(rc2, status2, 0);
 	}
-	close(fd[1]);
-    close(fd[0]);
-    wait(NULL);
 }
 
 void showHistory()
