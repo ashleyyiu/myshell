@@ -22,9 +22,11 @@ int convert_to_int(char*);
 void store_in_history(char* buffer);
 void showHistory();
 void clearHistory();
-void createPipeWrapper(char* input);
+int createPipeWrapper(char* input);
 void createPipe(char* cmd1, char* cmd2);
 int runCommand(char*, int);
+char* getCommandPath(char* input);
+char* getCommandArgs(char* input);
 
 const int PIPE_READ = 0;
 const int PIPE_WRITE = 1;
@@ -249,8 +251,9 @@ int tokenize(char *input) {
 } //end tokenize
 
 
-void createPipeWrapper(char* input)
-{	printf("Creating createPipeWrapper\n");
+int createPipeWrapper(char* input)
+{	
+	printf("Creating createPipeWrapper\n");
 	int pipes = 0;
     char* tmpInput = input;
     char* tmp;
@@ -283,30 +286,84 @@ void createPipeWrapper(char* input)
 	{
 		printf("allCommands at %d: %s\n", i, allCommands[i][0]);
 	}
-	createPipe(allCommands[0][0], allCommands[1][0]);
+	if (pipes)
+		createPipe(allCommands[0][0], allCommands[1][0]);
+	return pipes;
+}
 
+char* getCommandPath(char* input)
+{
+	char command[MAX_INPUT_SIZE];
+	char *shellArgs[MAX_INPUT_SIZE];
+	char *inputCopy= {strdup(input)};
+	char *cmdPath[MAX_INPUT_SIZE];
+	char *firstCmd;
+	int found = 0;
+
+	firstCmd = strtok(inputCopy," "); //first arg
+	for (int cur_path = 0; cur_path < NUM_PATHS; cur_path++) {
+		strcpy(command, PATHS[cur_path]);
+		strcat(command, firstCmd);
+		if (!access(command, X_OK)) {
+			found = 1;
+			break;
+		}
+	}
+
+	if (found == 0) {
+		printf("Error: entered command not found\n");
+		printf("Accepted paths are:\n");
+		for (int cur_path = 0; cur_path < NUM_PATHS; cur_path++) {
+			printf("\t%s\n", PATHS[cur_path]);
+		}
+	} else {
+		strcpy(cmdPath, command);
+	}
+	printf("In getCmdPath, returning cmdpath: %s\n", cmdPath);
+	return cmdPath;
 }
 
 void createPipe(char* cmd1, char* cmd2)
 {
+	int argNum = 0;
+	int found = 0;
+	char *execCmd1[MAX_INPUT_SIZE];
+	char *execCmd2[MAX_INPUT_SIZE];
+	char *command1Copy= {strdup(cmd1)};
+	char *command2Copy= {strdup(cmd2)};
+	char *command1CopyArgs= {strdup(cmd1)};
+	char *command2CopyArgs= {strdup(cmd2)};
+	char *cmdPath1;
+	char *cmdPath2;
 	printf("in createPipe where cmd1 is %s and cmd2 is %s\n", cmd1, cmd2);
+	cmdPath1 = strdup(getCommandPath(command1Copy)); // duplicate so it doesn't get overwritten
+	cmdPath2 = strdup(getCommandPath(command2Copy));
 
-	char cmdPath1[256];
-	char cmdPath2[256];
-	strcpy(cmdPath1, "/bin/");
-	strcpy(cmdPath2, "/bin/");
+	execCmd1[argNum] = strtok(command1CopyArgs," "); //first arg
+	while(execCmd1[argNum] != NULL) //additional args
+	{
+		execCmd1[++argNum] = strtok(NULL," "); //parse any more args
+	}
 
-	char* tmpCmd1 = {strdup(cmd1)};
-	char* tmpCmd2 = {strdup(cmd2)};
-	char* tmpCmd;
-	
-	tmpCmd = strtok(tmpCmd1, " ");
-	printf("tmpCmd1: %s\n", tmpCmd);
-	strcat(cmdPath1, tmpCmd);
+	printf("In createPipe, cmdpath1: %s\n", cmdPath1);
+	for (int index=0;index<argNum; index++)
+	{
+		printf("[%i] %s\n", index, execCmd1[index]);
+	}
 
-	tmpCmd = strtok(tmpCmd2, " ");
-	printf("tmpCmd2: %s\n", tmpCmd);
-	strcat(cmdPath2, tmpCmd);
+	argNum = 0;
+
+	execCmd2[argNum] = strtok(command2CopyArgs," "); //first arg
+	while(execCmd2[argNum] != NULL) //additional args
+	{
+		execCmd2[++argNum] = strtok(NULL," "); //parse any more args
+	}
+
+	printf("In createPipe, cmdpath2: %s\n", cmdPath2);
+	for (int index=0;index<1; index++)
+	{
+		printf("[%i] %s\n", index, execCmd2[index]);
+	}
 
 	pipe(fd);
 
@@ -319,12 +376,12 @@ void createPipe(char* cmd1, char* cmd2)
 		if (fork() == 0) {
 			printf("Child proc 2\n");
 			dup2(fd[1], STDOUT_FILENO); // fd[1] for writing
-		    printf("executing cmd1\n");
-        	execv(cmdPath1, cmd1); // cmd1 writes
+		    // printf("executing cmd1\n");
+        	execv(cmdPath1, execCmd1); // cmd1 writes
 		}
 	    wait(NULL);
 	    printf("executing cmd2\n");
-	    execv(cmdPath2, cmd2); // cmd2 reads
+	    execv(cmdPath2, execCmd2); // cmd2 reads
 	}
 	close(fd[1]);
     close(fd[0]);
@@ -376,55 +433,58 @@ int changeDirectory(char *newDirectory)
 }
 
 int runCommand(char* input, int hasAmpersand) {
-	// createPipeWrapper(input);
-	int argNum = 0;
-	int found = 0;
-	char* shellArgs[MAX_INPUT_SIZE];
-	char command[MAX_INPUT_SIZE];
-	char *inputCopy= {strdup(input)}; //strtok changes input, so copy
-
-	shellArgs[argNum] = strtok(inputCopy," "); //first arg
-	while(shellArgs[argNum] != NULL) //additional args
+	int pipesNeeded = createPipeWrapper(input);
+	if (pipesNeeded == 0) // execute here if no pipe needed
 	{
-		shellArgs[++argNum] = strtok(NULL," "); //parse any more args
-	}
-	// printf("Num of args: %i\n", argNum);
-	// printf("Listing all arguments:\n");
-	// for (int index=0;index<argNum; index++)
-	// {
-	// 	printf("[%i] %s\n", index, shellArgs[index]);
-	// }
-	for (int cur_path = 0; cur_path < NUM_PATHS; cur_path++) {
-		strcpy(command, PATHS[cur_path]);
-		strcat(command, shellArgs[0]);
-		if (!access(command, X_OK)) {
-			found = 1;
-			break;
+		int argNum = 0;
+		int found = 0;
+		char* shellArgs[MAX_INPUT_SIZE];
+		char command[MAX_INPUT_SIZE];
+		char *inputCopy= {strdup(input)}; //strtok changes input, so copy
+
+		shellArgs[argNum] = strtok(inputCopy," "); //first arg
+		while(shellArgs[argNum] != NULL) //additional args
+		{
+			shellArgs[++argNum] = strtok(NULL," "); //parse any more args
 		}
-	}
-	if (found == 0) {
-		printf("Error: entered command not found\n");
-		printf("Accepted paths are:\n");
+		// printf("Num of args: %i\n", argNum);
+		// printf("Listing all arguments:\n");
+		// for (int index=0;index<argNum; index++)
+		// {
+		// 	printf("[%i] %s\n", index, shellArgs[index]);
+		// }
 		for (int cur_path = 0; cur_path < NUM_PATHS; cur_path++) {
-			printf("\t%s\n", PATHS[cur_path]);
+			strcpy(command, PATHS[cur_path]);
+			strcat(command, shellArgs[0]);
+			if (!access(command, X_OK)) {
+				found = 1;
+				break;
+			}
 		}
-		return -1;
-	}
-	int pid = fork();
-	if (pid < 0) { // fork failed
-		printf("Fork failed\n");
-		return -1;
-	}
-	else if (pid == 0) { // child runs command
-		// printf("Fork success\n");
-		execv(command, shellArgs);
-		printf("Exec failed\n");
-		return -1;
-	}
-	else { // parent: wait until child is done (unless &)
-		if (!hasAmpersand)
-			waitpid(pid, NULL, 0);
-		return 0;
+		if (found == 0) {
+			printf("Error: entered command not found\n");
+			printf("Accepted paths are:\n");
+			for (int cur_path = 0; cur_path < NUM_PATHS; cur_path++) {
+				printf("\t%s\n", PATHS[cur_path]);
+			}
+			return -1;
+		}
+		int pid = fork();
+		if (pid < 0) { // fork failed
+			printf("Fork failed\n");
+			return -1;
+		}
+		else if (pid == 0) { // child runs command
+			// printf("Fork success\n");
+			execv(command, shellArgs);
+			printf("Exec failed\n");
+			return -1;
+		}
+		else { // parent: wait until child is done (unless &)
+			if (!hasAmpersand)
+				waitpid(pid, NULL, 0);
+			return 0;
+		}
 	}
 	return -1;
 }
