@@ -17,12 +17,13 @@
 int tokenize(char *input);
 int changeDirectory(char *newDirectory);
 void remove_trailing_newline_char(char *input);
+void skipBlanks(char*);
+int convert_to_int(char*);
 void store_in_history(char* buffer);
 void showHistory();
 void clearHistory();
 void createPipeWrapper(char* input);
 void createPipe(char* cmd1, char* cmd2);
-void skipBlanks(char* inputStr);
 int runCommand(char*, int);
 
 const int PIPE_READ = 0;
@@ -53,12 +54,11 @@ int main( int argc, char *argv[] )  {
 		remove_trailing_newline_char(input_buffer);
 		printf("your input: %s\n", input_buffer);
 		printf("HISTORY_INDEX %d\n", HISTORY_INDEX);
-		int ret = tokenize(input_buffer);
-		if (ret) { //if ret val not 0, don't write in history
-			printf("$");
-			continue; //bad input: don't write to history
-		}
 		store_in_history(input_buffer);
+		int retVal = tokenize(input_buffer);
+		if (retVal) {
+			printf("Invalid command: nothing run\n");
+		}
 		printf("Now we are about to process line #%d\n", HISTORY_INDEX);
 		printf("$");
 	}
@@ -119,6 +119,11 @@ int tokenize(char *input) {
 
 	skipBlanks(inputCopy);
 
+	// check for empty input
+	if (!strcmp(inputCopy, "")) {
+		return 0;
+	}
+
 	// check for multiple commands
 	semicolon = strchr(inputCopy, ';');
 	if (semicolon) {
@@ -152,7 +157,7 @@ int tokenize(char *input) {
 		return retVal;
 	}
 
-	// check for ampersand
+	// check for &
 	ampersandLoc = strchr(inputCopy, '&');
 	if (ampersandLoc) {
 		// printf("has ampersand: tokenize\n");
@@ -186,43 +191,54 @@ int tokenize(char *input) {
 	} //end cd
 
 	// history
-	else if (strcmp(inputCopy, "history") == 0) {
-		store_in_history(inputCopy);
-		showHistory();
-		return 1;
-	}
-	else if (strcmp(inputCopy, "history -c") == 0) {
-		printf("clear history\n");
-		clearHistory();
-		return 1;
-	} 
-	else if (strncmp(inputCopy, "history ", 8) == 0) {
-		offset = (inputCopy+8);
-		printf("offset: '%s'\n", offset);
-		rv = regcomp(&regex, "[[:digit:]]{1,2}", REG_EXTENDED);
-		if (rv != 0) {
-			printf("regcomp failed with %d\n", rv);
-		} 
-		else {
-			rv = regexec(&regex, offset, 0, NULL, 0);
-			printf("rv: %d\n", rv);
-			if (!rv) {
-				offsetInt = atoi(offset);
-				printf("history offset match: %d\n", offsetInt);
-				if (HISTORY_START == HISTORY_INDEX+1) {// just reached max capacity, had to bump start over to make room
-					printf("about to run the cmd at index %d\n", (offsetInt+HISTORY_START-1)%MAX_HISTORY_CMDS);
-					tokenize(HISTORY_CMDS[((offsetInt+HISTORY_START-1)%MAX_HISTORY_CMDS)][0]);
-				} 
-				else {
-					printf("about to run the cmd at index %d\n", (offsetInt+HISTORY_START)%MAX_HISTORY_CMDS);
-					tokenize(HISTORY_CMDS[( offsetInt+HISTORY_START)%MAX_HISTORY_CMDS][0]);
-				}
-			} 
-			else {
-				printf("no offset match\n");
-			}
+	else if (!strcmp(command, "history")) {
+		printf("is history\n");
+		char* hist_args = strtok(NULL, " ");
+
+		if (!hist_args) {
+			showHistory();
+			return 0;
 		}
-	} //end history
+		if (!strcmp(hist_args, "-c")) {
+			clearHistory();
+			return 0;
+		}
+		int index = convert_to_int(hist_args);
+		if (index != -1) {
+			printf("returned val: %i\n", index);//*******************************************************************************
+			//now run command in history[index] (+ offset of starting point)
+
+			// else if (strncmp(inputCopy, "history ", 8) == 0) {
+			// 	offset = (inputCopy+8);
+			// 	printf("offset: '%s'\n", offset);
+			// 	rv = regcomp(&regex, "[[:digit:]]{1,2}", REG_EXTENDED);
+			// 	if (rv != 0) {
+			// 		printf("regcomp failed with %d\n", rv);
+			// 	} 
+			// 	else {
+			// 		rv = regexec(&regex, offset, 0, NULL, 0);
+			// 		printf("rv: %d\n", rv);
+			// 		if (!rv) {
+			// 			offsetInt = atoi(offset);
+			// 			printf("history offset match: %d\n", offsetInt);
+			// 			if (HISTORY_START == HISTORY_INDEX+1) {// just reached max capacity, had to bump start over to make room
+			// 				printf("about to run the cmd at index %d\n", (offsetInt+HISTORY_START-1)%MAX_HISTORY_CMDS);
+			// 				tokenize(HISTORY_CMDS[((offsetInt+HISTORY_START-1)%MAX_HISTORY_CMDS)][0]);
+			// 			} 
+			// 			else {
+			// 				printf("about to run the cmd at index %d\n", (offsetInt+HISTORY_START)%MAX_HISTORY_CMDS);
+			// 				tokenize(HISTORY_CMDS[( offsetInt+HISTORY_START)%MAX_HISTORY_CMDS][0]);
+			// 			}
+			// 		} 
+			// 		else {
+			// 			printf("no offset match\n");
+			// 		}
+			// 	}
+			// } //end history
+			return 0;
+		}
+		printf("Error in history arguments\n");
+	}
 
 	//not cd or history: run command
 	else {
@@ -230,8 +246,7 @@ int tokenize(char *input) {
 	}
 
 	return -1;
-}
-	//you will have to handle (; & < >) characters.
+} //end tokenize
 
 
 void createPipeWrapper(char* input)
@@ -329,7 +344,6 @@ void showHistory()
 void clearHistory()
 {
 	printf("In clearHistory function\n");
-	char* NEW_HISTORY_CMDS[MAX_HISTORY_CMDS][MAX_HISTORY_CMDS];
 	HISTORY_START = 0;
 	HISTORY_INDEX = 0;
 	for (int i=0; i<MAX_HISTORY_CMDS; i++) {
@@ -347,6 +361,7 @@ int changeDirectory(char *newDirectory)
 	if (!chdir(newDirectory)) {
 		if (getcwd(cwd, sizeof(cwd))) {
 			printf("New Directory is now: %s\n", cwd);
+			return 0;
 		}
 		else {
 			perror("getcwd() error");
@@ -357,7 +372,7 @@ int changeDirectory(char *newDirectory)
 		perror("Failed to change directory");
 		return -1;
 	}
-	return 0;
+	return -1;
 }
 
 int runCommand(char* input, int hasAmpersand) {
@@ -404,12 +419,26 @@ int runCommand(char* input, int hasAmpersand) {
 		// printf("Fork success\n");
 		execv(command, shellArgs);
 		printf("Exec failed\n");
+		return -1;
 	}
 	else { // parent: wait until child is done (unless &)
 		if (!hasAmpersand)
 			waitpid(pid, NULL, 0);
+		return 0;
 	}
-	return 0;
+	return -1;
+}
+
+int convert_to_int(char* inputStr) {
+	int retVal = 0;
+	int inputStr_len = strlen(inputStr);
+	for (int i = 0; i < inputStr_len; i++) {
+		if (inputStr[i] < '0' || inputStr[i] > '9')
+			return -1;
+		else
+			retVal = (inputStr[i] - '0') + 10 * retVal;
+	}
+	return retVal;
 }
 
 void skipBlanks(char* inputStr) {
