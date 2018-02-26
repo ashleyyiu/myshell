@@ -1,14 +1,14 @@
 // Matthew Chiang and Ashley Yiu
 // OS Assignment 1
-// 2/28/2018
+// 2/26/2018
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
-#include <regex.h>
 #include <sys/wait.h>
 #include <fcntl.h>
+#include <ctype.h>
  
 #define MAX_INPUT_SIZE 2048
 #define MAX_HISTORY_CMDS 5
@@ -18,7 +18,6 @@
 int tokenize(char *input);
 int changeDirectory(char *newDirectory);
 void remove_trailing_newline_char(char *input);
-void skipBlanks(char*);
 int convert_to_int(char*);
 void store_in_history(char* buffer);
 void showHistory();
@@ -26,18 +25,19 @@ void clearHistory();
 int createPipeWrapper(char* input);
 void createPipe(char* cmd1, char* cmd2);
 int runCommand(char*, int);
-char *getCommandPath(char* input);
-char *trimWhiteSpace(char *input);
+char* getCommandPath(char* input);
+void trimLeadingWhitespace(char*);
+char* trimTrailingWhitespace(char*);
 
 const int PIPE_READ = 0;
 const int PIPE_WRITE = 1;
-const char* PATHS[3] = {"/bin/","/usr/bin/","./"};
+const char* PATHS[] = {"/bin/","/usr/bin/","./"};
 const int NUM_PATHS = 3;
 char* HOME_DIREC = NULL;
 int fd[2];
-int HISTORY_START = 0;
 int HISTORY_INDEX = 0; // points to next avail space
-char* HISTORY_CMDS[MAX_HISTORY_CMDS][MAX_HISTORY_CMDS];
+char* HISTORY_CMDS[MAX_HISTORY_CMDS];
+
 
 int main( int argc, char *argv[] )  {
 	char input_buffer[MAX_INPUT_SIZE];
@@ -45,6 +45,7 @@ int main( int argc, char *argv[] )  {
 	// getcwd(homeDirec, MAX_INPUT_SIZE);
 	// HOME_DIREC = &homeDirec;
 	getcwd(HOME_DIREC, MAX_INPUT_SIZE);
+	clearHistory();
 
 	printf("$");
 	while (fgets (input_buffer, MAX_INPUT_SIZE, stdin))
@@ -56,13 +57,12 @@ int main( int argc, char *argv[] )  {
 		}
 		remove_trailing_newline_char(input_buffer);
 		printf("your input: %s\n", input_buffer);
-		printf("HISTORY_INDEX %d\n", HISTORY_INDEX);
-		store_in_history(input_buffer);
-		int retVal = tokenize(input_buffer);
-		if (retVal) {
-			printf("Invalid command: nothing run\n");
+		int toStore = tokenize(input_buffer);
+		if (toStore) {
+			printf("$");
+			continue;
 		}
-		printf("Now we are about to process line #%d\n", HISTORY_INDEX);
+		store_in_history(input_buffer);
 		printf("$");
 	}
 
@@ -78,21 +78,7 @@ void remove_trailing_newline_char(char* input)
 	}
 }
 
-void store_in_history(char* buffer) 
-{
-	char *bufferCopy= {strdup(buffer)};
-	HISTORY_CMDS[HISTORY_INDEX][0] = bufferCopy;
-	HISTORY_CMDS[HISTORY_INDEX][strlen(buffer)] = '\0';
-
-	HISTORY_INDEX = (HISTORY_INDEX+1)%MAX_HISTORY_CMDS;
-
-	if (HISTORY_INDEX == HISTORY_START) {
-		HISTORY_START++;
-	}
-}
-
 int tokenize(char *input) {
-	regex_t regex;
 	char* offset;
 	char* semicolon = NULL;
 	char* ampersandLoc = NULL;
@@ -107,7 +93,7 @@ int tokenize(char *input) {
 	strcpy(input_to_tokens, input); // dest, source
 	char* command = strtok(input_to_tokens, " "); // first argument of input
 
-	skipBlanks(inputCopy);
+	trimLeadingWhitespace(inputCopy);
 
 	// check for empty input
 	if (!strcmp(inputCopy, "")) {
@@ -143,8 +129,8 @@ int tokenize(char *input) {
 			cur_command[cur_len+1] = '\0';
 		}
 		// printf("last command: %s\n", cur_command);
-		retVal = tokenize(cur_command);
-		return retVal;
+		tokenize(cur_command);
+		return 0;
 	}
 
 	// check for &
@@ -172,71 +158,58 @@ int tokenize(char *input) {
 			if (HOME_DIREC == NULL) {
 				printf("no dest or home direc\n");
 			}
-			return changeDirectory(HOME_DIREC);
+			changeDirectory(HOME_DIREC);
+			return 0;
 		}
 		// destination exists
 		else {
-			return changeDirectory(destination);
+			changeDirectory(destination);
+			return 0;
 		}
 	} //end cd
 
 	// history
 	else if (!strcmp(command, "history")) {
-		printf("is history\n");
 		char* hist_args = strtok(NULL, " ");
 
 		if (!hist_args) {
+			store_in_history(input);
 			showHistory();
-			return 0;
+			return 1; //already stored before show, so don't store again
 		}
 		if (!strcmp(hist_args, "-c")) {
 			clearHistory();
-			return 0;
+			return 1; //don't store clear
 		}
 		int index = convert_to_int(hist_args);
 		if (index != -1) {
-			printf("returned val: %i\n", index);//*******************************************************************************
-			//now run command in history[index] (+ offset of starting point)
-
-			// else if (strncmp(inputCopy, "history ", 8) == 0) {
-			// 	offset = (inputCopy+8);
-			// 	printf("offset: '%s'\n", offset);
-			// 	rv = regcomp(&regex, "[[:digit:]]{1,2}", REG_EXTENDED);
-			// 	if (rv != 0) {
-			// 		printf("regcomp failed with %d\n", rv);
-			// 	} 
-			// 	else {
-			// 		rv = regexec(&regex, offset, 0, NULL, 0);
-			// 		printf("rv: %d\n", rv);
-			// 		if (!rv) {
-			// 			offsetInt = atoi(offset);
-			// 			printf("history offset match: %d\n", offsetInt);
-			// 			if (HISTORY_START == HISTORY_INDEX+1) {// just reached max capacity, had to bump start over to make room
-			// 				printf("about to run the cmd at index %d\n", (offsetInt+HISTORY_START-1)%MAX_HISTORY_CMDS);
-			// 				tokenize(HISTORY_CMDS[((offsetInt+HISTORY_START-1)%MAX_HISTORY_CMDS)][0]);
-			// 			} 
-			// 			else {
-			// 				printf("about to run the cmd at index %d\n", (offsetInt+HISTORY_START)%MAX_HISTORY_CMDS);
-			// 				tokenize(HISTORY_CMDS[( offsetInt+HISTORY_START)%MAX_HISTORY_CMDS][0]);
-			// 			}
-			// 		} 
-			// 		else {
-			// 			printf("no offset match\n");
-			// 		}
-			// 	}
-			// } //end history
-			return 0;
+			//test if index is valid
+			int histFull = (HISTORY_CMDS[HISTORY_INDEX] != NULL);
+			if ((histFull && index >= MAX_HISTORY_CMDS) || (!histFull && index >= HISTORY_INDEX)) {
+				printf("Error: invalid history index\n");
+				return 1;
+			}
+			if (histFull) {
+				tokenize(HISTORY_CMDS[(index + HISTORY_INDEX)%MAX_HISTORY_CMDS]);
+				store_in_history(HISTORY_CMDS[(HISTORY_INDEX + index)%MAX_HISTORY_CMDS]); // store the cmd you ran to avoid infinite recursion
+			}
+			else {
+				tokenize(HISTORY_CMDS[(index)%MAX_HISTORY_CMDS]);
+				store_in_history(HISTORY_CMDS[(index)%MAX_HISTORY_CMDS]); // store the cmd you ran to avoid infinite recursion
+			}
+			return 1; //just stored cmd ran, so don't store again
 		}
 		printf("Error in history arguments\n");
 	}
 
 	//not cd or history: run command
 	else {
-		return runCommand(inputCopy, (ampersandLoc == NULL) ? 0 : 1);
+		runCommand(inputCopy, (ampersandLoc == NULL) ? 0 : 1);
+		return 0;
 	}
 
-	return -1;
-} //end tokenize
+	return 0;
+} //end tokenize()
 
 
 int createPipeWrapper(char* input)
@@ -279,36 +252,36 @@ int createPipeWrapper(char* input)
 	return pipes;
 }
 
+// input: "ls -a"
+// output: "/bin/ls"
+// make sure you free return value after using
 char* getCommandPath(char* input)
 {
-	char command[MAX_INPUT_SIZE];
-	char *shellArgs[MAX_INPUT_SIZE];
-	char *inputCopy= {strdup(input)};
-	char *cmdPath[MAX_INPUT_SIZE];
-	char *firstCmd;
+	char* cmd_and_path = malloc(MAX_INPUT_SIZE);
+	char inputCopy[MAX_INPUT_SIZE];
+	char* cmd;
 	int found = 0;
 
-	firstCmd = strtok(inputCopy," "); //first arg
+	strcpy(inputCopy, input); // so you don't change parameter
+	cmd = strtok(inputCopy, " "); // cmd = "ls" from "ls -a"
 	for (int cur_path = 0; cur_path < NUM_PATHS; cur_path++) {
-		strcpy(command, PATHS[cur_path]);
-		strcat(command, firstCmd);
-		if (!access(command, X_OK)) {
+		strcpy(cmd_and_path, PATHS[cur_path]); //c_a_p = "/bin/"
+		strcat(cmd_and_path, cmd); //c_a_p = "/bin/ls"
+		if (!access(cmd_and_path, X_OK)) { //test if valid
 			found = 1;
 			break;
 		}
 	}
-
 	if (found == 0) {
 		printf("Error: entered command not found\n");
 		printf("Accepted paths are:\n");
 		for (int cur_path = 0; cur_path < NUM_PATHS; cur_path++) {
 			printf("\t%s\n", PATHS[cur_path]);
 		}
-	} else {
-		strcpy(cmdPath, command);
-	}
-	// printf("In getCmdPath, returning cmdpath: %s\n", cmdPath);
-	return cmdPath;
+		return 0;
+	} 
+	// printf("In getCmdPath, returning cmdpath: %s\n", cmd_and_path);
+	return cmd_and_path;
 }
 
 void createPipe(char* cmd1, char* cmd2)
@@ -396,25 +369,39 @@ void createPipe(char* cmd1, char* cmd2)
 	}
 }
 
+void store_in_history(char* cmd)
+{
+	if (HISTORY_CMDS[HISTORY_INDEX] != NULL && strcmp(cmd, HISTORY_CMDS[HISTORY_INDEX])) {
+		free(HISTORY_CMDS[HISTORY_INDEX]);
+	}
+	char* toStore = strdup(cmd);
+	HISTORY_CMDS[HISTORY_INDEX] = toStore;
+	HISTORY_INDEX = (HISTORY_INDEX+1)%MAX_HISTORY_CMDS;
+} // end store_in_history()
+
 void showHistory()
 {
-	printf("In showHistory function\n");
-	for (int i=HISTORY_START; i<=HISTORY_START+MAX_HISTORY_CMDS; i++) {
-		if (HISTORY_CMDS[i][0] == NULL)
-			break;
-		printf("%d: %s\n", i-HISTORY_START, HISTORY_CMDS[i][0]);
+	// hist not full yet
+	if (HISTORY_CMDS[HISTORY_INDEX] == NULL) {
+		for (int i=0; i < HISTORY_INDEX; i++) {
+			printf("%d: %s\n", i, HISTORY_CMDS[i]);
+		}
+		return;
 	}
-}
+	// hist is full
+	for (int i=HISTORY_INDEX; i < HISTORY_INDEX+MAX_HISTORY_CMDS; i++) {
+		printf("%d: %s\n", i-HISTORY_INDEX, HISTORY_CMDS[i % MAX_HISTORY_CMDS]);
+	}
+} // end showHistory()
 
 void clearHistory()
 {
-	printf("In clearHistory function\n");
-	HISTORY_START = 0;
 	HISTORY_INDEX = 0;
-	for (int i=0; i<MAX_HISTORY_CMDS; i++) {
-		HISTORY_CMDS[i][0] = NULL;
+	for (int i=0; i < MAX_HISTORY_CMDS; i++) {
+		free(HISTORY_CMDS[i]);
+		HISTORY_CMDS[i] = NULL;
 	}
-}
+} // end clearHistory()
 
 int changeDirectory(char *newDirectory)
 {
@@ -465,8 +452,8 @@ int redirect(char* input) // return 1 if need to redirect, else 0
 	}
 
 	if (redirectInput != -1) {
-		fileName = trimWhiteSpace(fileName);
-		cmd = trimWhiteSpace(cmd);
+		fileName = trimTrailingWhitespace(fileName);
+		cmd = trimTrailingWhitespace(cmd);
 		shellArgs[argNum] = strtok(cmd," "); //first arg
 		while(shellArgs[argNum] != NULL) //additional args
 		{
@@ -505,7 +492,7 @@ int redirect(char* input) // return 1 if need to redirect, else 0
 	return 0;
 }
 
-char *trimWhiteSpace(char *input)
+char *trimTrailingWhitespace(char *input)
 {
   char *end;
 
@@ -518,66 +505,66 @@ char *trimWhiteSpace(char *input)
 
   return input;
 }
-int runCommand(char* input, int hasAmpersand) {
-	int pipesNeeded = createPipeWrapper(input);
-	int redirectionNeeded = redirect(input);
-	if (redirectionNeeded == 0 && pipesNeeded == 0) // execute here if no pipe needed
-	{
-		int argNum = 0;
-		int found = 0;
-		char* shellArgs[MAX_INPUT_SIZE];
-		char command[MAX_INPUT_SIZE];
-		char *inputCopy= {strdup(input)}; //strtok changes input, so copy
 
-		shellArgs[argNum] = strtok(inputCopy," "); //first arg
-		while(shellArgs[argNum] != NULL) //additional args
-		{
-			shellArgs[++argNum] = strtok(NULL," "); //parse any more args
-		}
-		// printf("Num of args: %i\n", argNum);
-		// printf("Listing all arguments:\n");
-		// for (int index=0;index<argNum; index++)
-		// {
-		// 	printf("[%i] %s\n", index, shellArgs[index]);
-		// }
-		for (int cur_path = 0; cur_path < NUM_PATHS; cur_path++) {
-			strcpy(command, PATHS[cur_path]);
-			strcat(command, shellArgs[0]);
-			if (!access(command, X_OK)) {
-				found = 1;
-				break;
-			}
-		}
-		if (found == 0) {
-			printf("Error: entered command not found\n");
-			printf("Accepted paths are:\n");
-			for (int cur_path = 0; cur_path < NUM_PATHS; cur_path++) {
-				printf("\t%s\n", PATHS[cur_path]);
-			}
-			return -1;
-		}
-		int pid = fork();
-		if (pid < 0) { // fork failed
-			printf("Fork failed\n");
-			return -1;
-		}
-		else if (pid == 0) { // child runs command
-			// printf("Fork success\n");
-			execv(command, shellArgs);
-			printf("Exec failed\n");
-			return -1;
-		}
-		else { // parent: wait until child is done (unless &)
-			if (!hasAmpersand)
-				waitpid(pid, NULL, 0);
-			return 0;
-		}
-	} else {
+
+int runCommand(char* input, int hasAmpersand) {
+	// int pipesNeeded = createPipeWrapper(input);
+	// int redirectionNeeded = redirect(input);
+	// if (redirectionNeeded != 0 || pipesNeeded != 0) {
+	// 	return 0;
+	// }
+
+	
+	// execute here if no pipe needed
+	int argNum = 0;
+	int found = 0;
+	char* shellArgs[MAX_INPUT_SIZE];
+	char* command;
+	char* inputCopy= {strdup(input)}; //strtok changes input, so copy
+
+	shellArgs[argNum] = strtok(inputCopy," "); //first arg
+	while(shellArgs[argNum] != NULL) //additional args
+	{
+		shellArgs[++argNum] = strtok(NULL," "); //parse any more args
+	}
+	// printf("Num of args: %i\n", argNum);
+	// printf("Listing all arguments:\n");
+	// for (int index=0;index<argNum; index++)
+	// printf("[%i] %s\n", index, shellArgs[index]);
+
+	command = getCommandPath(input);
+	if (!command) {
+		free(inputCopy);
+		free(command);
+		return -1;
+	}
+
+	int pid = fork();
+	if (pid < 0) { // fork failed
+		printf("Fork failed\n");
+		free(inputCopy);
+		free(command);
+		return -1;
+	}
+	else if (pid == 0) { // child runs command
+		// printf("Fork success\n");
+		execv(command, shellArgs);
+		printf("Exec failed\n");
+		free(inputCopy);
+		free(command);
+		return -1;
+	}
+	else { // parent: wait until child is done (unless &)
+		if (!hasAmpersand)
+			waitpid(pid, NULL, 0);
+		free(inputCopy);
+		free(command);
 		return 0;
 	}
-	return -1;
 }
 
+// input: str("34")
+// output: int(34)
 int convert_to_int(char* inputStr) {
 	int retVal = 0;
 	int inputStr_len = strlen(inputStr);
@@ -590,8 +577,9 @@ int convert_to_int(char* inputStr) {
 	return retVal;
 }
 
-void skipBlanks(char* inputStr) {
-	while (inputStr[0] == ' ') {
+// modifies string (memory) pointed to
+void trimLeadingWhitespace(char* inputStr) {
+	while (isspace((unsigned char)*inputStr)) {
 		memmove(inputStr, inputStr+1, strlen(inputStr));
 	}
 }
