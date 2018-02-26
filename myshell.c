@@ -40,9 +40,6 @@ char* HISTORY_CMDS[MAX_HISTORY_CMDS];
 
 int main( int argc, char *argv[] )  {
 	char input_buffer[MAX_INPUT_SIZE];
-	// const char homeDirec[MAX_INPUT_SIZE];
-	// getcwd(homeDirec, MAX_INPUT_SIZE);
-	// HOME_DIREC = &homeDirec;
 	getcwd(HOME_DIREC, MAX_INPUT_SIZE);
 	clearHistory();
 
@@ -106,28 +103,24 @@ int tokenize(char *input) {
 		while (semicolon != NULL) {
 			char cur_command[256] = {0};
 			for (; charIter < semicolon; charIter++) {
-				// printf("letters before semicolon: %c\n", *charIter);
 				int cur_len = strlen(cur_command);
 				cur_command[cur_len] = *charIter;
 				cur_command[cur_len+1] = '\0';
 			}
-			// printf("current command: %s\n", cur_command);
 
 			// run command
 			retVal = tokenize(cur_command);
 			semicolon = strchr(semicolon+1, ';'); // if valid, continue w/ next command
 			charIter++; //skip ; char
 		}
-		// printf("at end\n");
 		char* endOfInput = strchr(inputCopy, '\0');
 		char cur_command[256] = {0};
 		for (; charIter < endOfInput; charIter++) {
-			// printf("letters before end: %c\n", *charIter);
 			int cur_len = strlen(cur_command);
 			cur_command[cur_len] = *charIter;
 			cur_command[cur_len+1] = '\0';
 		}
-		// printf("last command: %s\n", cur_command);
+
 		tokenize(cur_command);
 		return 0;
 	}
@@ -135,7 +128,6 @@ int tokenize(char *input) {
 	// check for &
 	ampersandLoc = strchr(inputCopy, '&');
 	if (ampersandLoc) {
-		// printf("has ampersand: tokenize\n");
 		memmove(ampersandLoc, ampersandLoc+1, strlen(inputCopy)); //remove & from input
 	}
 
@@ -212,7 +204,6 @@ int tokenize(char *input) {
 
 int createPipeWrapper(char* input) 
 {	
-	printf("Creating createPipeWrapper\n");
 	int pipes = 0;
     char* originalInput = {strdup(input)};
     int j = 0;
@@ -224,10 +215,8 @@ int createPipeWrapper(char* input)
 		++originalInput;
 		++pipes;
 	}
-	printf("We need %d pipes\n", pipes);
 
 	// check for redirection symbols, > and <
-	printf("Checking for redirect\n");
 	// find > and/or <
 	char* inputCopyForRedirectionInput = strdup(input);
 	char* inputCopyForRedirectionOutput = strdup(input);
@@ -235,9 +224,6 @@ int createPipeWrapper(char* input)
 	char* outputFileName;
 	int redirectInput = 0;
 	int redirectOutput = 0;
- 
- 	printf("%s\n",inputCopyForRedirectionInput);
- 	printf("%s\n",inputCopyForRedirectionOutput);
 
  	outputFileName = strstr(inputCopyForRedirectionOutput, ">");
 	if (outputFileName) { // ls > tmp.txt
@@ -252,16 +238,10 @@ int createPipeWrapper(char* input)
 		inputFileName = trimWhiteSpace(strtok(NULL, "<"));
 		redirectInput = 1;
 	}
-
-	printf("Filename for input: '%s'\n", inputFileName);
-	printf("Filename for output: '%s'\n", outputFileName);
     
     if (pipes || redirectInput || redirectOutput) {
-    	printf("In pipes\n");
 	  	int originalIn = dup(0);
 	  	int originalOut = dup(1);
-		// int PIPE_READ = dup(STDIN_FILENO);
-		// int PIPE_WRITE;
 		int fdout = dup(originalOut);
 	  	int argNum = 0;
 	  	char* inputCmdsParsed = strdup(input);
@@ -275,15 +255,9 @@ int createPipeWrapper(char* input)
 	  		fdin = dup(originalIn);
 	  	}
 
-		printf("fdin %d fdout %d\n", fdin, fdout);
-
-		printf("inputCmdsParsed: '%s'\n", inputCmdsParsed);
 		tmpCmd = strtok(inputCmdsParsed, "|");
 		inputCmdsRest = strtok(inputCmdsRest, "|");
 		inputCmdsRest = strtok(NULL, "");
-		printf("tmpCmd: '%s'\n", tmpCmd);
-		printf("inputCmdsParsed: '%s'\n", inputCmdsParsed);
-		printf("inputCmdsRest: '%s'\n", inputCmdsRest);
 
 		//pipes
 		for (int i=0; i<=pipes; i++)
@@ -297,21 +271,18 @@ int createPipeWrapper(char* input)
 			if (strstr(tmpCmd, "<"))
 			{
 				tmpCmd = trimWhiteSpace(strtok(tmpCmd, "<"));
-				cmdPath = getCommandPath(tmpCmd);
 			} else if (strstr(tmpCmd, ">")) {
 				tmpCmd = trimWhiteSpace(strtok(tmpCmd, ">"));
-				cmdPath = getCommandPath(tmpCmd);
 			} else {
 				tmpCmd = trimWhiteSpace(tmpCmd);
-				cmdArgs[argNum] = strtok(inputCmdsParsed," ");
-				while(cmdArgs[argNum] != NULL) //additional args
-				{
-					cmdArgs[++argNum] = strtok(NULL," "); //parse any more args
-				}
-				cmdPath = strdup(getCommandPath(strdup(cmdArgs[0])));
 			}
+			cmdArgs[argNum] = strtok(inputCmdsParsed," ");
+			while(cmdArgs[argNum] != NULL) //additional args
+			{
+				cmdArgs[++argNum] = strtok(NULL," "); //parse any more args
+			}
+			cmdPath = strdup(getCommandPath(strdup(cmdArgs[0])));
 
-			printf("cmdPath: %s\n",cmdPath);
 			// redirect input
 			dup2(fdin, STDIN_FILENO);
 			close(fdin);
@@ -320,7 +291,7 @@ int createPipeWrapper(char* input)
 			if (i == pipes) { // for last cmd, redirect output
 				if (redirectOutput)
 				{
-					fdout = open(outputFileName, O_WRONLY);
+					fdout = open(outputFileName, O_WRONLY); // write only
 				} else {
 					fdout = dup(originalOut);
 				}
@@ -363,18 +334,9 @@ int createPipeWrapper(char* input)
 // make sure you free return value after using
 char* getCommandPath(char* input)
 {
-// <<<<<<< HEAD
-// 	printf("in getCommandPath where input is '%s'\n", input);
-// 	char command[MAX_INPUT_SIZE];
-// 	char *shellArgs[MAX_INPUT_SIZE];
-// 	char *inputCopy= {strdup(input)};
-// 	char *cmdPath[MAX_INPUT_SIZE];
-// 	char *firstCmd;
-// =======
 	char* cmd_and_path = malloc(MAX_INPUT_SIZE);
 	char inputCopy[MAX_INPUT_SIZE];
 	char* cmd;
-// >>>>>>> 8397d4f7c9b128e86f6218ed3e1dda5eb5f46f95
 	int found = 0;
 
 	strcpy(inputCopy, input); // so you don't change parameter
@@ -393,104 +355,9 @@ char* getCommandPath(char* input)
 		for (int cur_path = 0; cur_path < NUM_PATHS; cur_path++) {
 			printf("\t%s\n", PATHS[cur_path]);
 		}
-// <<<<<<< HEAD
-// 	} else {
-// 		strcpy(cmdPath, command);
-// 	}
-// 	printf("In getCmdPath, returning cmdpath: %s\n", cmdPath);
-// 	return cmdPath;
-// }
-
-// =======
 		return 0;
 	}
-	// printf("In getCmdPath, returning cmdpath: %s\n", cmd_and_path);
 	return cmd_and_path;
-}
-
-void createPipe(char* cmd1, char* cmd2)
-{
-	int argNum = 0;
-	int found = 0;
-	char *execCmd1[MAX_INPUT_SIZE];
-	char *execCmd2[MAX_INPUT_SIZE];
-	char *command1Copy= {strdup(cmd1)};
-	char *command2Copy= {strdup(cmd2)};
-	char *command1CopyArgs= {strdup(cmd1)};
-	char *command2CopyArgs= {strdup(cmd2)};
-	char *cmdPath1;
-	char *cmdPath2;
-	// printf("in createPipe where cmd1 is %s and cmd2 is %s\n", cmd1, cmd2);
-	cmdPath1 = strdup(getCommandPath(command1Copy)); // duplicate so it doesn't get overwritten
-	cmdPath2 = strdup(getCommandPath(command2Copy));
-
-	execCmd1[argNum] = strtok(command1CopyArgs," "); //first arg
-	while(execCmd1[argNum] != NULL) //additional args
-	{
-		execCmd1[++argNum] = strtok(NULL," "); //parse any more args
-	}
-
-	// printf("In createPipe, cmdpath1: %s\n", cmdPath1);
-	// for (int index=0;index<argNum; index++)
-	// {
-	// 	printf("[%i] %s\n", index, execCmd1[index]);
-	// }
-
-	argNum = 0;
-
-	execCmd2[argNum] = strtok(command2CopyArgs," "); //first arg
-	while(execCmd2[argNum] != NULL) //additional args
-	{
-		execCmd2[++argNum] = strtok(NULL," "); //parse any more args
-	}
-
-	// printf("In createPipe, cmdpath2: %s\n", cmdPath2);
-	// for (int index=0;index<1; index++)
-	// {
-	// 	printf("[%i] %s\n", index, execCmd2[index]);
-	// }
-
-	int PIPE_READ;
-	int PIPE_WRITE;
-
-	int fd[2];
-	pipe(fd);
-
-	pid_t rc = fork();
-	pid_t rc2 = 0;
-
-  	PIPE_WRITE = fd[1];
-  	PIPE_READ = fd[0];
-
-	if (rc < 0){
-		printf("Fork failed\n");
-
-	} else if (rc == 0) { // 1st child process will write to pipe
-		printf("Child proc, PID:=%d\n", getpid());
-		dup2(PIPE_WRITE, STDOUT_FILENO); // replace stdout with pipe input
-		close(PIPE_READ);
-		execv(cmdPath1, execCmd1);
-		perror("exec");
-	} else { // parent process will read from pipe
-		wait(NULL);
-		printf("Parent proc, PID:=%d\n", getpid());
-
-		// 2nd child process will read from pipe
-		rc2 = fork();
-		if (rc2 < 0) {
-			printf("Fork failed\n");
-		} else if (rc2 == 0) {
-			printf("Parent's second child proc, PID:=%d\n", getpid());
-			dup2(PIPE_READ, STDIN_FILENO); // replace stdin with pipe output
-			close(PIPE_WRITE);
-			execv(cmdPath2, execCmd2);
-			perror("exec");
-		}
-		close(PIPE_READ);
-		close(PIPE_WRITE);
-		waitpid(rc, NULL, 0);
-		waitpid(rc2, NULL, 0);
-	}
 }
 
 void store_in_history(char* cmd)
@@ -503,7 +370,6 @@ void store_in_history(char* cmd)
 	HISTORY_INDEX = (HISTORY_INDEX+1)%MAX_HISTORY_CMDS;
 } // end store_in_history()
 
-//>>>>>>> 8397d4f7c9b128e86f6218ed3e1dda5eb5f46f95
 void showHistory()
 {
 	// hist not full yet
@@ -552,77 +418,7 @@ int changeDirectory(char *newDirectory)
 	return -1;
 }
 
-/*<<<<<<< HEAD
 char *trimWhiteSpace(char *input)
-=======
-*/
-int redirect(char* input) // return 1 if need to redirect, else 0
-{
-	printf("In redirect\n");
-	// find > or <
-	char* inputCopy = strdup(input);
-	char* fileName;
-	char* cmd;
-	char* cmdPath;
-	char* shellArgs[MAX_INPUT_SIZE];
-	int argNum = 0;
-	int redirectInput = -1; //0 for redirecting output, 1 for redirecting input
-	int fd;
-	pid_t rc;
-
-	if (strstr(inputCopy, ">")) {// ls > tmp.txt
-		cmd = strtok(inputCopy, ">");
-		fileName = strtok(NULL, " ");
-		redirectInput = 0;
-	} else if (strstr(inputCopy, "<")) {
-		cmd = strtok(inputCopy, "<"); // cat < tmp.txt
-		fileName = strtok(NULL, " ");
-		redirectInput = 1;
-	}
-
-	if (redirectInput != -1) {
-		fileName = trimWhiteSpace(fileName);
-		cmd = trimWhiteSpace(cmd);
-		shellArgs[argNum] = strtok(cmd," "); //first arg
-		while(shellArgs[argNum] != NULL) //additional args
-		{
-			shellArgs[++argNum] = strtok(NULL," "); //parse any more args
-		}
-		printf("Listing all arguments:\n");
-		for (int index=0;index<argNum; index++)
-		{
-			printf("[%i] %s\n", index, shellArgs[index]);
-		}
-	}
-
-	cmdPath = getCommandPath(input);
-
-	if (cmd && fileName) {
-		printf("Redirecting where cmd pathcmd  is '%s' and filename is '%s'\n", cmdPath, fileName);
-		rc = fork();
-		if (rc < 0)
-			printf ("Fork failed\n");
-		else if (rc == 0) // child proc
-		{
-			if (redirectInput) { // open in "r" mode
-				close(STDIN_FILENO); // close stdin fd
-				fd = open(fileName, O_RDONLY); // repla it with file
-			} else { // open in "w" mode
-				close(STDOUT_FILENO);
-				fd = open(fileName, O_WRONLY);
-			}
-			execv(cmdPath, shellArgs);
-			perror("exec");
-		} else { // parent
-			waitpid(rc, NULL, 0);
-		}
-		return 1;
-	}
-	return 0;
-}
-
-char *trimWhiteSpace(char *input)
-// >>>>>>> 8397d4f7c9b128e86f6218ed3e1dda5eb5f46f95
 {
   char *end;
   // Trim space from left
@@ -655,10 +451,6 @@ int runCommand(char* input, int hasAmpersand) {
 	{
 		shellArgs[++argNum] = strtok(NULL," "); //parse any more args
 	}
-	// printf("Num of args: %i\n", argNum);
-	// printf("Listing all arguments:\n");
-	// for (int index=0;index<argNum; index++)
-	// printf("[%i] %s\n", index, shellArgs[index]);
 
 	command = getCommandPath(input);
 	if (!command) {
