@@ -19,7 +19,7 @@ int tokenize(char *input);
 int changeDirectory(char *newDirectory);
 void remove_trailing_newline_char(char *input);
 int convert_to_int(char*);
-void store_in_history(char* buffer);
+void store_in_history(char* cmd);
 void showHistory();
 void clearHistory();
 int createPipeWrapper(char* input);
@@ -30,9 +30,9 @@ char* trimWhiteSpace(char*);
 
 const int PIPE_READ = 0;
 const int PIPE_WRITE = 1;
-const char* PATHS[] = {"/bin/","/usr/bin/","./"};
-const int NUM_PATHS = 3;
-char* HOME_DIREC = NULL;
+const char* PATHS[] = {"", "/bin/","/usr/bin/","./"};
+const int NUM_PATHS = 4;
+char HOME_DIREC[MAX_INPUT_SIZE];
 int fd[2];
 int HISTORY_INDEX = 0; // points to next avail space
 char* HISTORY_CMDS[MAX_HISTORY_CMDS];
@@ -40,7 +40,7 @@ char* HISTORY_CMDS[MAX_HISTORY_CMDS];
 
 int main( int argc, char *argv[] )  {
 	char input_buffer[MAX_INPUT_SIZE];
-	getcwd(HOME_DIREC, MAX_INPUT_SIZE);
+	getcwd(HOME_DIREC, sizeof(HOME_DIREC));
 	clearHistory();
 
 	printf("$");
@@ -53,8 +53,8 @@ int main( int argc, char *argv[] )  {
 		}
 		remove_trailing_newline_char(input_buffer);
 		printf("your input: %s\n", input_buffer);
-		int toStore = tokenize(input_buffer);
-		if (toStore) {
+		int skipStore = tokenize(input_buffer);
+		if (skipStore) {
 			printf("$");
 			continue;
 		}
@@ -141,13 +141,13 @@ int tokenize(char *input) {
 
 	// cd
 	else if (!strcmp(command, "cd")) {
-		printf("is cd\n");
 		char* destination = strtok(NULL, " "); //parse destination
 
 		//no destination: go home
 		if (destination == NULL) {
 			if (HOME_DIREC == NULL) {
 				printf("no dest or home direc\n");
+				return 0;
 			}
 			changeDirectory(HOME_DIREC);
 			return 0;
@@ -396,26 +396,11 @@ void clearHistory()
 
 int changeDirectory(char *newDirectory)
 {
-	printf("Changing Directory to: '%s'\n", newDirectory);
-	char cwd[1024];
-	if (getcwd(cwd, sizeof(cwd))) {
-		printf("Current Directory is: %s\n", cwd);
-	}
-	if (!chdir(newDirectory)) {
-		if (getcwd(cwd, sizeof(cwd))) {
-			printf("New Directory is now: %s\n", cwd);
-			return 0;
-		}
-		else {
-			perror("getcwd() error");
-			return -1;
-		}
-	} 
-	else {
+	if (chdir(newDirectory)) {
 		perror("Failed to change directory");
 		return -1;
 	}
-	return -1;
+	return 0; //success
 }
 
 char *trimWhiteSpace(char *input)
