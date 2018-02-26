@@ -24,7 +24,6 @@ void store_in_history(char* buffer);
 void showHistory();
 void clearHistory();
 int createPipeWrapper(char* input);
-void createPipe(char* cmd1, char* cmd2);
 int runCommand(char*, int);
 char *getCommandPath(char* input);
 char *trimWhiteSpace(char *input);
@@ -238,49 +237,157 @@ int tokenize(char *input) {
 	return -1;
 } //end tokenize
 
-
-int createPipeWrapper(char* input)
+int createPipeWrapper(char* input) 
 {	
 	printf("Creating createPipeWrapper\n");
 	int pipes = 0;
-    char* tmpInput = input;
-    char* tmp;
-    char* inputCopy = {strdup(input)};
-    int i = 0;
+    char* originalInput = {strdup(input)};
+    int j = 0;
     int positions[strlen(input)];
+    // check for pipes
     const char *needle = "|";
-	while (tmpInput = strstr(tmpInput, needle))
+	while (originalInput = strstr(originalInput, needle))
 	{
-		printf("Found | at position %d\n", (int) (tmpInput-input));
-		positions[pipes] = (int) (tmpInput-input);
-		++tmpInput;
+		++originalInput;
 		++pipes;
 	}
 	printf("We need %d pipes\n", pipes);
-    
-    char* allCommands[pipes][256];
 
-    //split up the commands
-	tmp = strtok (inputCopy, "|");
+	// check for redirection symbols, > and <
+	printf("Checking for redirect\n");
+	// find > and/or <
+	char* inputCopyForRedirectionInput = strdup(input);
+	char* inputCopyForRedirectionOutput = strdup(input);
+	char* inputFileName;
+	char* outputFileName;
+	int redirectInput = 0;
+	int redirectOutput = 0;
+ 
+ 	printf("%s\n",inputCopyForRedirectionInput);
+ 	printf("%s\n",inputCopyForRedirectionOutput);
 
-	while (tmp != NULL)
-    {
-        allCommands[i++][0] = tmp;
-        tmp = strtok (NULL, "|");
-    }
-
-	//assuming we have 2 only
-	for (int i=0; i<pipes+1; i++)
-	{
-		printf("allCommands at %d: %s\n", i, allCommands[i][0]);
+ 	outputFileName = strstr(inputCopyForRedirectionOutput, ">");
+	if (outputFileName) { // ls > tmp.txt
+		outputFileName = strtok(inputCopyForRedirectionOutput, ">");
+		outputFileName = trimWhiteSpace(strtok(NULL, " "));
+		redirectOutput = 1;
 	}
-	if (pipes)
-		createPipe(allCommands[0][0], allCommands[1][0]);
-	return pipes;
+ 	
+ 	inputFileName = strstr(inputCopyForRedirectionInput, "<");
+	if (inputFileName) { // cat < fake.txt
+		inputFileName = strtok(inputCopyForRedirectionInput, "<");
+		inputFileName = trimWhiteSpace(strtok(NULL, "<"));
+		redirectInput = 1;
+	}
+
+	printf("Filename for input: '%s'\n", inputFileName);
+	printf("Filename for output: '%s'\n", outputFileName);
+    
+    if (pipes || redirectInput || redirectOutput) {
+    	printf("In pipes\n");
+	  	int originalIn = dup(0);
+	  	int originalOut = dup(1);
+		// int PIPE_READ = dup(STDIN_FILENO);
+		// int PIPE_WRITE;
+		int fdout = dup(originalOut);
+	  	int argNum = 0;
+	  	char* inputCmdsParsed = strdup(input);
+	  	char* inputCmdsRest = strdup(input);
+	  	char* tmpCmd;
+	  	int fdin;
+
+	  	if (redirectInput) {
+	  		fdin = open(inputFileName, O_RDONLY);
+	  	} else {
+	  		fdin = dup(originalIn);
+	  	}
+
+		printf("fdin %d fdout %d\n", fdin, fdout);
+
+		printf("inputCmdsParsed: '%s'\n", inputCmdsParsed);
+		tmpCmd = strtok(inputCmdsParsed, "|");
+		inputCmdsRest = strtok(inputCmdsRest, "|");
+		inputCmdsRest = strtok(NULL, "");
+		printf("tmpCmd: '%s'\n", tmpCmd);
+		printf("inputCmdsParsed: '%s'\n", inputCmdsParsed);
+		printf("inputCmdsRest: '%s'\n", inputCmdsRest);
+
+		//pipes
+		for (int i=0; i<=pipes; i++)
+		{	
+			pid_t rc;
+			char* cmdPath;
+		  	char* cmdCopy;
+		  	char* cmdArgs[10];
+			argNum = 0;
+			// get path and args
+			if (strstr(tmpCmd, "<"))
+			{
+				tmpCmd = trimWhiteSpace(strtok(tmpCmd, "<"));
+				cmdPath = getCommandPath(tmpCmd);
+			} else if (strstr(tmpCmd, ">")) {
+				tmpCmd = trimWhiteSpace(strtok(tmpCmd, ">"));
+				cmdPath = getCommandPath(tmpCmd);
+			} else {
+				tmpCmd = trimWhiteSpace(tmpCmd);
+				cmdArgs[argNum] = strtok(inputCmdsParsed," ");
+				while(cmdArgs[argNum] != NULL) //additional args
+				{
+					cmdArgs[++argNum] = strtok(NULL," "); //parse any more args
+				}
+				cmdPath = strdup(getCommandPath(strdup(cmdArgs[0])));
+			}
+
+			printf("cmdPath: %s\n",cmdPath);
+			// redirect input
+			dup2(fdin, STDIN_FILENO);
+			close(fdin);
+
+
+			if (i == pipes) { // for last cmd, redirect output
+				if (redirectOutput)
+				{
+					fdout = open(outputFileName, O_WRONLY);
+				} else {
+					fdout = dup(originalOut);
+				}
+			} else { // if not last cmd, create pipe
+				int fd[2];
+				pipe(fd);
+			  	fdin = fd[0];
+			  	fdout = fd[1];
+			}
+
+			// redirect output
+			dup2(fdout, STDOUT_FILENO);
+			close(fdout);
+			rc = fork();
+			if (rc < 0){
+				printf("Fork failed\n");
+			} else if (rc == 0) { // 1st child process will write to pipe
+				execv(cmdPath, cmdArgs);
+				perror("exec");
+			} else {
+				wait(NULL);
+				if (inputCmdsRest) {
+					tmpCmd = strtok(inputCmdsRest, "|");
+					inputCmdsParsed = strdup(tmpCmd);
+					inputCmdsRest = strtok(NULL, "");
+				}
+			}
+		} // end of for loop
+		dup2(originalIn, STDIN_FILENO);
+		dup2(originalOut, STDOUT_FILENO);
+		close(originalIn);
+		close(originalOut);
+		return 1;
+	}
+	return 0;
 }
 
 char* getCommandPath(char* input)
 {
+	printf("in getCommandPath where input is '%s'\n", input);
 	char command[MAX_INPUT_SIZE];
 	char *shellArgs[MAX_INPUT_SIZE];
 	char *inputCopy= {strdup(input)};
@@ -307,93 +414,8 @@ char* getCommandPath(char* input)
 	} else {
 		strcpy(cmdPath, command);
 	}
-	// printf("In getCmdPath, returning cmdpath: %s\n", cmdPath);
+	printf("In getCmdPath, returning cmdpath: %s\n", cmdPath);
 	return cmdPath;
-}
-
-void createPipe(char* cmd1, char* cmd2)
-{
-	int argNum = 0;
-	int found = 0;
-	char *execCmd1[MAX_INPUT_SIZE];
-	char *execCmd2[MAX_INPUT_SIZE];
-	char *command1Copy= {strdup(cmd1)};
-	char *command2Copy= {strdup(cmd2)};
-	char *command1CopyArgs= {strdup(cmd1)};
-	char *command2CopyArgs= {strdup(cmd2)};
-	char *cmdPath1;
-	char *cmdPath2;
-	// printf("in createPipe where cmd1 is %s and cmd2 is %s\n", cmd1, cmd2);
-	cmdPath1 = strdup(getCommandPath(command1Copy)); // duplicate so it doesn't get overwritten
-	cmdPath2 = strdup(getCommandPath(command2Copy));
-
-	execCmd1[argNum] = strtok(command1CopyArgs," "); //first arg
-	while(execCmd1[argNum] != NULL) //additional args
-	{
-		execCmd1[++argNum] = strtok(NULL," "); //parse any more args
-	}
-
-	// printf("In createPipe, cmdpath1: %s\n", cmdPath1);
-	// for (int index=0;index<argNum; index++)
-	// {
-	// 	printf("[%i] %s\n", index, execCmd1[index]);
-	// }
-
-	argNum = 0;
-
-	execCmd2[argNum] = strtok(command2CopyArgs," "); //first arg
-	while(execCmd2[argNum] != NULL) //additional args
-	{
-		execCmd2[++argNum] = strtok(NULL," "); //parse any more args
-	}
-
-	// printf("In createPipe, cmdpath2: %s\n", cmdPath2);
-	// for (int index=0;index<1; index++)
-	// {
-	// 	printf("[%i] %s\n", index, execCmd2[index]);
-	// }
-
-	int PIPE_READ;
-	int PIPE_WRITE;
-
-	int fd[2];
-	pipe(fd);
-
-	pid_t rc = fork();
-	pid_t rc2 = 0;
-
-  	PIPE_WRITE = fd[1];
-  	PIPE_READ = fd[0];
-
-	if (rc < 0){
-		printf("Fork failed\n");
-
-	} else if (rc == 0) { // 1st child process will write to pipe
-		printf("Child proc, PID:=%d\n", getpid());
-		dup2(PIPE_WRITE, STDOUT_FILENO); // replace stdout with pipe input
-		close(PIPE_READ);
-		execv(cmdPath1, execCmd1);
-		perror("exec");
-	} else { // parent process will read from pipe
-		wait(NULL);
-		printf("Parent proc, PID:=%d\n", getpid());
-
-		// 2nd child process will read from pipe
-		rc2 = fork();
-		if (rc2 < 0) {
-			printf("Fork failed\n");
-		} else if (rc2 == 0) {
-			printf("Parent's second child proc, PID:=%d\n", getpid());
-			dup2(PIPE_READ, STDIN_FILENO); // replace stdin with pipe output
-			close(PIPE_WRITE);
-			execv(cmdPath2, execCmd2);
-			perror("exec");
-		}
-		close(PIPE_READ);
-		close(PIPE_WRITE);
-		waitpid(rc, NULL, 0);
-		waitpid(rc2, NULL, 0);
-	}
 }
 
 void showHistory()
@@ -440,76 +462,13 @@ int changeDirectory(char *newDirectory)
 	return -1;
 }
 
-int redirect(char* input) // return 1 if need to redirect, else 0
-{
-	printf("In redirect\n");
-	// find > or <
-	char* inputCopy = strdup(input);
-	char* fileName;
-	char* cmd;
-	char* cmdPath;
-	char* shellArgs[MAX_INPUT_SIZE];
-	int argNum = 0;
-	int redirectInput = -1; //0 for redirecting output, 1 for redirecting input
-	int fd;
-	pid_t rc;
-
-	if (strstr(inputCopy, ">")) {// ls > tmp.txt
-		cmd = strtok(inputCopy, ">");
-		fileName = strtok(NULL, " ");
-		redirectInput = 0;
-	} else if (strstr(inputCopy, "<")) {
-		cmd = strtok(inputCopy, "<"); // cat < tmp.txt
-		fileName = strtok(NULL, " ");
-		redirectInput = 1;
-	}
-
-	if (redirectInput != -1) {
-		fileName = trimWhiteSpace(fileName);
-		cmd = trimWhiteSpace(cmd);
-		shellArgs[argNum] = strtok(cmd," "); //first arg
-		while(shellArgs[argNum] != NULL) //additional args
-		{
-			shellArgs[++argNum] = strtok(NULL," "); //parse any more args
-		}
-		printf("Listing all arguments:\n");
-		for (int index=0;index<argNum; index++)
-		{
-			printf("[%i] %s\n", index, shellArgs[index]);
-		}
-	}
-
-	cmdPath = getCommandPath(input);
-
-	if (cmd && fileName) {
-		printf("Redirecting where cmd pathcmd  is '%s' and filename is '%s'\n", cmdPath, fileName);
-		rc = fork();
-		if (rc < 0)
-			printf ("Fork failed\n");
-		else if (rc == 0) // child proc
-		{
-			if (redirectInput) { // open in "r" mode
-				close(STDIN_FILENO); // close stdin fd
-				fd = open(fileName, O_RDONLY); // repla it with file
-			} else { // open in "w" mode
-				close(STDOUT_FILENO);
-				fd = open(fileName, O_WRONLY);
-			}
-			execv(cmdPath, shellArgs);
-			perror("exec");
-		} else { // parent
-			waitpid(rc, NULL, 0);
-		}
-		return 1;
-	}
-	return 0;
-}
-
 char *trimWhiteSpace(char *input)
 {
   char *end;
+  // Trim space from left
+  while(isspace((unsigned char)*input)) input++;
 
-  // Trim trailing space
+  // Trim space from right
   end = input + strlen(input) - 1;
   while(end > input && isspace((unsigned char)*end)) end--;
 
@@ -519,9 +478,8 @@ char *trimWhiteSpace(char *input)
   return input;
 }
 int runCommand(char* input, int hasAmpersand) {
-	int pipesNeeded = createPipeWrapper(input);
-	int redirectionNeeded = redirect(input);
-	if (redirectionNeeded == 0 && pipesNeeded == 0) // execute here if no pipe needed
+	int redirect = createPipeWrapper(input);
+	if (!redirect) // execute here if no pipe/redirection needed
 	{
 		int argNum = 0;
 		int found = 0;
