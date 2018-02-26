@@ -1,6 +1,6 @@
-// Matthew Chiang and Ashley Yiu
-// OS Assignment 1
-// 2/26/2018
+     517    1534   12692 fake.c
+     517    1534   12692 total
+8
 
 #include <stdio.h>
 #include <stdlib.h>

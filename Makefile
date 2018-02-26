@@ -1,2 +1,2 @@
 target:
-	gcc myshell.c -o myshell -ggdb
+	gcc myshell.c -o myshell

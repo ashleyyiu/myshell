@@ -210,7 +210,7 @@ int createPipeWrapper(char* input)
     int positions[strlen(input)];
     // check for pipes
     const char *needle = "|";
-	while (originalInput = strstr(originalInput, needle))
+	while ((originalInput = strstr(originalInput, needle)))
 	{
 		++originalInput;
 		++pipes;
