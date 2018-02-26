@@ -8,7 +8,8 @@
 #include <string.h>
 #include <regex.h>
 #include <sys/wait.h>
-
+#include <fcntl.h>
+ 
 #define MAX_INPUT_SIZE 2048
 #define MAX_HISTORY_CMDS 5
 #define STDIN_FILENO 0
@@ -25,8 +26,8 @@ void clearHistory();
 int createPipeWrapper(char* input);
 void createPipe(char* cmd1, char* cmd2);
 int runCommand(char*, int);
-char* getCommandPath(char* input);
-char* getCommandArgs(char* input);
+char *getCommandPath(char* input);
+char *trimWhiteSpace(char *input);
 
 const int PIPE_READ = 0;
 const int PIPE_WRITE = 1;
@@ -360,8 +361,6 @@ void createPipe(char* cmd1, char* cmd2)
 
 	pid_t rc = fork();
 	pid_t rc2 = 0;
-	int status1;
-	int status2;
 
   	PIPE_WRITE = fd[1];
   	PIPE_READ = fd[0];
@@ -392,8 +391,8 @@ void createPipe(char* cmd1, char* cmd2)
 		}
 		close(PIPE_READ);
 		close(PIPE_WRITE);
-		waitpid(rc, status1, 0);
-		waitpid(rc2, status2, 0);
+		waitpid(rc, NULL, 0);
+		waitpid(rc2, NULL, 0);
 	}
 }
 
@@ -441,9 +440,88 @@ int changeDirectory(char *newDirectory)
 	return -1;
 }
 
+int redirect(char* input) // return 1 if need to redirect, else 0
+{
+	printf("In redirect\n");
+	// find > or <
+	char* inputCopy = strdup(input);
+	char* fileName;
+	char* cmd;
+	char* cmdPath;
+	char* shellArgs[MAX_INPUT_SIZE];
+	int argNum = 0;
+	int redirectInput = -1; //0 for redirecting output, 1 for redirecting input
+	int fd;
+	pid_t rc;
+
+	if (strstr(inputCopy, ">")) {// ls > tmp.txt
+		cmd = strtok(inputCopy, ">");
+		fileName = strtok(NULL, " ");
+		redirectInput = 0;
+	} else if (strstr(inputCopy, "<")) {
+		cmd = strtok(inputCopy, "<"); // cat < tmp.txt
+		fileName = strtok(NULL, " ");
+		redirectInput = 1;
+	}
+
+	if (redirectInput != -1) {
+		fileName = trimWhiteSpace(fileName);
+		cmd = trimWhiteSpace(cmd);
+		shellArgs[argNum] = strtok(cmd," "); //first arg
+		while(shellArgs[argNum] != NULL) //additional args
+		{
+			shellArgs[++argNum] = strtok(NULL," "); //parse any more args
+		}
+		printf("Listing all arguments:\n");
+		for (int index=0;index<argNum; index++)
+		{
+			printf("[%i] %s\n", index, shellArgs[index]);
+		}
+	}
+
+	cmdPath = getCommandPath(input);
+
+	if (cmd && fileName) {
+		printf("Redirecting where cmd pathcmd  is '%s' and filename is '%s'\n", cmdPath, fileName);
+		rc = fork();
+		if (rc < 0)
+			printf ("Fork failed\n");
+		else if (rc == 0) // child proc
+		{
+			if (redirectInput) { // open in "r" mode
+				close(STDIN_FILENO); // close stdin fd
+				fd = open(fileName, O_RDONLY); // repla it with file
+			} else { // open in "w" mode
+				close(STDOUT_FILENO);
+				fd = open(fileName, O_WRONLY);
+			}
+			execv(cmdPath, shellArgs);
+			perror("exec");
+		} else { // parent
+			waitpid(rc, NULL, 0);
+		}
+		return 1;
+	}
+	return 0;
+}
+
+char *trimWhiteSpace(char *input)
+{
+  char *end;
+
+  // Trim trailing space
+  end = input + strlen(input) - 1;
+  while(end > input && isspace((unsigned char)*end)) end--;
+
+  // Write new null terminator
+  *(end+1) = 0;
+
+  return input;
+}
 int runCommand(char* input, int hasAmpersand) {
 	int pipesNeeded = createPipeWrapper(input);
-	if (pipesNeeded == 0) // execute here if no pipe needed
+	int redirectionNeeded = redirect(input);
+	if (redirectionNeeded == 0 && pipesNeeded == 0) // execute here if no pipe needed
 	{
 		int argNum = 0;
 		int found = 0;
