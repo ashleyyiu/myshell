@@ -306,7 +306,7 @@ char* getCommandPath(char* input)
 	} else {
 		strcpy(cmdPath, command);
 	}
-	printf("In getCmdPath, returning cmdpath: %s\n", cmdPath);
+	// printf("In getCmdPath, returning cmdpath: %s\n", cmdPath);
 	return cmdPath;
 }
 
@@ -322,7 +322,7 @@ void createPipe(char* cmd1, char* cmd2)
 	char *command2CopyArgs= {strdup(cmd2)};
 	char *cmdPath1;
 	char *cmdPath2;
-	printf("in createPipe where cmd1 is %s and cmd2 is %s\n", cmd1, cmd2);
+	// printf("in createPipe where cmd1 is %s and cmd2 is %s\n", cmd1, cmd2);
 	cmdPath1 = strdup(getCommandPath(command1Copy)); // duplicate so it doesn't get overwritten
 	cmdPath2 = strdup(getCommandPath(command2Copy));
 
@@ -332,11 +332,11 @@ void createPipe(char* cmd1, char* cmd2)
 		execCmd1[++argNum] = strtok(NULL," "); //parse any more args
 	}
 
-	printf("In createPipe, cmdpath1: %s\n", cmdPath1);
-	for (int index=0;index<argNum; index++)
-	{
-		printf("[%i] %s\n", index, execCmd1[index]);
-	}
+	// printf("In createPipe, cmdpath1: %s\n", cmdPath1);
+	// for (int index=0;index<argNum; index++)
+	// {
+	// 	printf("[%i] %s\n", index, execCmd1[index]);
+	// }
 
 	argNum = 0;
 
@@ -346,11 +346,11 @@ void createPipe(char* cmd1, char* cmd2)
 		execCmd2[++argNum] = strtok(NULL," "); //parse any more args
 	}
 
-	printf("In createPipe, cmdpath2: %s\n", cmdPath2);
-	for (int index=0;index<1; index++)
-	{
-		printf("[%i] %s\n", index, execCmd2[index]);
-	}
+	// printf("In createPipe, cmdpath2: %s\n", cmdPath2);
+	// for (int index=0;index<1; index++)
+	// {
+	// 	printf("[%i] %s\n", index, execCmd2[index]);
+	// }
 
 	int PIPE_READ;
 	int PIPE_WRITE;
@@ -494,6 +494,8 @@ int runCommand(char* input, int hasAmpersand) {
 				waitpid(pid, NULL, 0);
 			return 0;
 		}
+	} else {
+		return 0;
 	}
 	return -1;
 }
